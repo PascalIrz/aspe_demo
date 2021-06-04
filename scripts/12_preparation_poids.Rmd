@@ -1,0 +1,210 @@
+---
+title: "Démonstrateur ASPE : prétraitements poids"
+author: "Pascal Irz"
+date: "`r format(Sys.time(), 'Le %d %B %Y')`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+# Chargements
+
+Packages
+
+```{r}
+library(aspe)
+library(tidyverse)
+```
+
+Données
+
+```{r, eval = FALSE}
+load(file = "raw_data/toutes_tables_aspe_sauf_mei.RData")
+load(file = "raw_data/mei.RData")
+```
+
+```{r, eval = TRUE, echo = FALSE}
+load(file = "../raw_data/toutes_tables_aspe_sauf_mei.RData")
+load(file = "../raw_data/mei.RData")
+```
+
+
+# Problématique
+
+Pour calculer des densités en biomasse (unité $g/m^2$ prospecté), il faut associer à chacune des capture son poids. Or, sur le terrain, les poissons ne sont pas toujours pesés individuellement. On distingue 4 types de cas ou "lots" :
+
+```{r}
+ref_type_lot %>% 
+  knitr::kable(align = c('c', 'c', 'c', 'c', 'l'))
+```
+
+
+Il s'agit de construire une table associant à chaque identifiant de lot son poids. On accorde des privilèges décroissants dans cet ordre :
+
+- poids des lots mesurés `lop_poids`
+- poids des lots estimés `lop_poids_estime`
+- pour les "lots N" (mesures individuelles), les poids mesurés `lop_poids`
+- pour les "lots N" (mesures individuelles), les poids mesurés `lop_poids_estime`
+
+Quand tous les cas ci-dessus ont été traités, il n'y a pas de poids, mais les longueurs `mei_taille` sont toujours renseignées. Il s'agira donc d'appliquer des relations taille-poids pour estimer ceux qui manquent.
+
+# Construction de la table de correspondance
+
+## Assemblage des données
+
+On assemble les données depuis plusieurs tables de la base Aspe.
+
+```{r}
+passerelle_mei <- mef_creer_passerelle() %>%
+  left_join(
+    y = mesure_individuelle %>%
+      select(
+        mei_id,
+        lop_id = mei_lop_id,
+        mei_taille,
+        mei_poids,
+        mei_poids_estime,
+        mei_mesure_reelle,
+        tlo_id = mei_tlo_id
+      )
+  ) %>%
+  left_join(
+    y = lot_poissons %>%
+      select(
+        lop_id,
+        lop_esp_id,
+        lop_tyl_id,
+        lop_longueur_specimens_taille_mini,
+        lop_longueur_specimens_taille_maxi,
+        lop_poids,
+        lop_poids_estime,
+        lop_effectif,
+        lop_tlo_id
+      )
+  ) %>%
+  distinct()
+```
+
+
+## Poids renseignés
+
+On applique la priorisation décrite ci-dessus.
+
+```{r}
+passerelle_mei <- passerelle_mei %>% 
+  mutate(mon_lop_poids_est = case_when(!is.na(lop_poids) ~ lop_poids,
+                                       !is.na(lop_poids_estime) ~ lop_poids_estime,
+                                       lop_tyl_id == 4 & !is.na(mei_poids) ~ mei_poids,
+                                       lop_tyl_id == 4 & !is.na(mei_poids_estime) ~ mei_poids_estime,
+                                       TRUE ~ NA_integer_))
+```
+
+Les lots dont les cas sont réglés sont les suivants :
+
+```{r}
+lots_ok <- passerelle_mei %>%
+  filter(!is.na(mon_lop_poids_est)) %>% 
+  select(lop_id, mon_lop_poids_est) %>% 
+  distinct()
+```
+
+Ce qui représente `r (100 * nrow(lop_poids_est_ok) / (passerelle_mei %>% pull(lop_id) %>% n_distinct())) %>% round()`% des lots du dataframe `passerelle_mei`.
+
+## Poids non renseignés
+
+Pour appliquer la relation taille-poids il faut disposer de l'espèce, de la taille et du type de longueur. Par défaut si celui-ci est manquant on considère qque l'on est dans le cas le plus fréquent, à savoir en longueur totale.
+
+```{r}
+passerelle_poids_a_estimer <- passerelle_mei %>% 
+  mutate(tlo_id = ifelse(is.na(tlo_id), 2, tlo_id)) %>%  # si type de longueur manque, le plus commun
+  filter(is.na(mon_lop_poids_est),
+         !is.na(mei_taille))
+```
+
+Ajout du code espèce à 3 lettres et conversion des longueurs en cm pour appliquer les relations taille-poids.
+
+```{r}
+poids_a_estimer <- passerelle_poids_a_estimer %>%
+  select(lop_id,
+         esp_id = lop_esp_id,
+         tlo_id,
+         mei_taille,
+         mon_lop_poids_est) %>%
+  left_join(y = ref_espece %>%
+              select(esp_id,
+                     esp_code_alternatif)) %>%
+  distinct() %>%
+  mutate(mei_taille = mei_taille / 10)
+```
+
+
+### Chargement des relations taille - poids
+
+```{r, echo = FALSE}
+load(file = "../processed_data/tp.RData")
+```
+
+```{r, eval = FALSE}
+load(file = "processed_data/tp.RData")
+```
+
+
+```{r}
+# lf_sat <- qtp_estimer_poids(df_biometrie = passerelle_poids_a_estimer,
+#                             espece = "SAT",
+#                             type_longueur = 1,
+#                             df_taille_poids = tp)
+# 
+# lt_sat <- qtp_estimer_poids(df_biometrie = passerelle_poids_a_estimer,
+#                             espece = "SAT",
+#                             type_longueur = 2,
+#                             df_taille_poids = tp)
+```
+
+On construit un tableau des nb d'individus par combinaison tlo / esp_code_alternatif pour lesquels il faut estimer le poids. 
+
+```{r}
+mes_esp_tlo <- poids_a_estimer %>% 
+  group_by(esp_code_alternatif, tlo_id) %>% 
+    tally() %>% 
+  ungroup() %>% 
+  mutate(esp_code_alternatif = as.character(esp_code_alternatif)) # si type de longueur manque, le plus commun
+
+# pb / trop de lignes !
+poids_completes <- map2(.x = mes_esp_tlo$esp_code_alternatif,
+                        .y = mes_esp_tlo$tlo_id,
+                        .f = qtp_estimer_poids,
+                        df_biometrie = poids_a_estimer,
+                        df_taille_poids = tp) %>%
+  reduce(rbind)
+
+lots_ok <- lots_ok %>% 
+  rbind(poids_completes %>%
+          filter(!is.na(mon_lop_poids_est)) %>% 
+          select(lop_id,
+                 mon_lop_poids_est) %>%
+          distinct)
+
+passerelle_poids_a_estimer <- passerelle_poids_a_estimer %>% 
+  filter(!(lop_id %in% lots_ok %>% pull(lop_id)))
+
+
+nrow(poids_completes)
+nrow(lop_poids_est)
+
+v_pds_completes  <- poids_completes %>% 
+  group_by(esp_code_alternatif) %>% 
+    summarise(n_pds_completes = n())
+
+v_pds_estimes  <- lop_poids_est %>% 
+  group_by(esp_code_alternatif) %>% 
+    summarise(n_pds_estimes = n())
+
+prov <- data.frame(v_pds_completes, v_pds_estimes) %>% 
+  mutate(diff = n_pds_completes - n_pds_estimes) %>% 
+  filter(diff != 0)
+```
+
+Quelles esp ont des lignes en trop ?

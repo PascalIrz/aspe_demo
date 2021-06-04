@@ -1,0 +1,140 @@
+---
+title: "Démonstrateur ASPE : Construction des briques élémentaires"
+author: "Pascal Irz"
+date: "`r format(Sys.time(), 'Le %d %B %Y')`"
+output: html_document
+---
+  
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+# Chargement des packages et des données
+
+```{r}
+library(aspe)
+library(tidyverse)
+```
+
+
+```{r, echo = FALSE}
+load(file = "../processed_data/captures.RData")
+load(file = "../processed_data/pop_geo.RData")
+load(file = "../processed_data/sh_geo.RData")
+```
+
+```{r, eval = FALSE}
+load(file = "processed_data/captures.RData")
+load(file = "processed_data/pop_geo.RData")
+load(file = "processed_data/sh_geo.RData")
+```
+
+# Définition de la palette de couleurs
+
+```{r}
+coul_contrast <- RColorBrewer::brewer.pal(n = 8, name = "Dark2")
+coul_pastel <- RColorBrewer::brewer.pal(n = 8, name = "Pastel1")
+
+mon_theme <-
+  theme(
+    panel.background = element_rect(fill = coul_pastel[2]),
+    panel.grid.major = element_line(colour = coul_pastel[3]),
+    panel.grid.minor = element_line(colour = coul_pastel[3],
+                                    linetype = 'dotted',
+                                    size = 0.7)
+  )
+```
+
+# Description d'ensemble des données
+
+>NB on parle ici des données qui ont été préparées auparavant, donc filtrées, et non de la totalité de ce qui est en base.
+
+## Carte du nb d'années de données par point
+
+Tableau de données qui sera visualisé avec `mapview`.
+
+```{r}
+nb_ope_par_pop <- captures %>%
+  group_by(pop_id, annee) %>% 
+    slice(1) %>%  # une seule opération par an
+  group_by(pop_id) %>% 
+    summarise(nb_ope = n_distinct(ope_id)) %>% 
+  ungroup() %>% 
+  left_join(y = pop_geo) %>% 
+  sf::st_as_sf()
+```
+
+## Evolution temporelle du nb annuel d'opérations
+
+Tableau.
+
+```{r}
+nb_ope_par_an <- captures %>%
+  group_by(annee) %>% 
+    summarise(nb_ope_an = n_distinct(ope_id)) %>% 
+  ungroup()
+```
+
+Graphique.
+
+```{r}
+g_nb_ope_par_an <- nb_ope_par_an %>% 
+  ggplot(aes(x = annee, y = nb_ope_an)) +
+    geom_line() +
+    labs(x = "", y = "Nb pêches complètes à pied réalisées en réseau")
+
+g_nb_ope_par_an +
+  mon_theme
+```
+
+## Nombre total d'opérations
+
+```{r}
+nb_ope_tot <- nb_ope_par_an %>% 
+  pull(nb_ope_an) %>% 
+  sum()
+```
+
+## Carte des points échantillonnés chaque année
+
+Tableau
+
+```{r}
+pop_prospectes_chaque_an <- captures %>% 
+  select(pop_id, pop_libelle, annee) %>% 
+  distinct() %>% 
+  left_join(y = pop_geo) %>% 
+  sf::st_as_sf()
+```
+
+# Richesse spécifique
+
+## Nombre total d'espèces piscicoles
+
+Comme il y a des taxons dans la base qui ne sont pas des espèces piscicoles (hybrides, cristacés), il faut restreindre à l'intersection entre les codes présents dans les captures et ceux de la table `traits_poissons` contenue dans la package `{aspe}`.
+
+```{r}
+captures <- captures %>% 
+  filter(esp_code_alternatif %in% traits_poissons$esp_code_alternatif) %>% 
+  droplevels()
+```
+
+
+```{r}
+nb_sp_tot <- captures %>% 
+  pull(esp_code_alternatif) %>% 
+  n_distinct()
+```
+
+## Nb d'espèces par bassin par an
+
+```{r}
+# nb_esp_par_rh_par_an <- captures %>% 
+#   left_join(y = sh_geo) %>% 
+#   group_by(CdSecteurH, annee) %>% 
+#     summarise(nb_esp = n_distinct(esp_code_alternatif))
+```
+
+
+  
+
