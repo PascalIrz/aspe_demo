@@ -1,5 +1,5 @@
 ---
-title: "Démonstrateur ASPE : Construction des synthèses par point"
+title: "Démonstrateur ASPE : Eléments Peuplement 1 point"
 author: "Pascal Irz"
 date: "`r format(Sys.time(), 'Le %d %B %Y')`"
 output: html_document
@@ -19,16 +19,14 @@ library(tidyverse)
 
 ```{r, echo = FALSE}
 load(file = "../processed_data/captures.RData")
-load(file = "../processed_data/pop_geo.RData")
-load(file = "../processed_data/sh_geo.RData")
-load(file = "../processed_data/bretagne.RData")
+# load(file = "../processed_data/pop_geo.RData")
+# load(file = "../processed_data/sh_geo.RData")
 ```
 
 ```{r, eval = FALSE}
 load(file = "processed_data/captures.RData")
-load(file = "processed_data/pop_geo.RData")
-load(file = "processed_data/sh_geo.RData")
-load(file = "processed_data/bretagne")
+# load(file = "processed_data/pop_geo.RData")
+# load(file = "processed_data/sh_geo.RData")
 ```
 
 ```{r}
@@ -42,11 +40,12 @@ capt_mef_colo_ext <- mef_colo_ext_pop(df = captures,
 ```{r}
 gg_colo_ext_pop(capt_mef_colo_ext)
 ```
+
 # IPR
 
 ```{r}
-ipr <- mef_creer_passerelle() %>% 
-  ipr_extraire()
+# ipr <- mef_creer_passerelle() %>% 
+#   ipr_extraire()
 ```
 
 
