@@ -2,13 +2,23 @@
 title: "Démonstrateur ASPE : préparation des données"
 author: "Pascal Irz"
 date: "`r format(Sys.time(), 'Le %d %B %Y')`"
-output: html_document
+output:
+  html_document:
+    toc: true
+    toc_float: true
 ---
 
 ```{r setup, include = FALSE}
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
 ```
 
+# Principe
+
+Le démonstrateur est une application *shiny* permettant de visualiser un tableau de bord d'indicateurs en fonction de la sélection par l'utilisateur d'un point de pêche ou d'une aire géographique.
+
+L'information contenue dans la base Aspe étant tabulée, il faut la spatialiser pour permettre la sélection géographique. Pour une rapidité d'affichage satisfaisante, les opérations les plus lourdes de traitement (ex : intersections géographiques) sont au maximum réalisées lors de prétraitements, donc en dehors de l'appli. Les données sont autant que possible agrégées pour diminuer la taille des tables.
+
+Ces opérations de prétraitement ne sont pas spécifiques au développement du démonstrateur. Au contraire elles sont assez génériques pour qui souhaite exploiter la base Aspe pour calculer sur un périmètre donné, une période donnée, etc. des indicateurs comme les abondances, densités, IPR et autres. Elles ont donc fait l'objet du développement, à part, d'un package R nommé [{aspe}](https://github.com/PascalIrz/aspe). Certaines des données géographiques sont téléchargées et mises en forme au moyen du package [{tod}](https://github.com/PascalIrz/tod).
 
 
 # Préparation des données tabulées
@@ -251,7 +261,9 @@ mapview::mapview(sample_n(pop_geo, 100), col.regions = "red") +
   mapview::mapview(rh_geo)
 ```
 
-### Assignation aux pop des secteurs hydro et départements
+# Assignation des points
+
+On complète le *dataframe* `pop_geo` en attribuant à chacun des points son appartenance à un secteur / région / district hydrographique, à un département et à une région. 
 
 ```{r}
 pop_geo <- pop_geo %>% 
@@ -277,7 +289,7 @@ pop_geo <- pop_geo %>%
 
 
 
-### Simplification des découpages géographiques
+# Simplification des découpages géographiques
 
 Pour les besoins ci-dessus d'attribution à chaque point de prélèvement d'une *région hydro*, d'un département, etc. il était nécessaire d'employer des couches d'information géographique précises en particulier parce que les limites de départements sony souvent des cours d'eau. En revanche pour la visualisation on va simplifier les polygones pour les alléger et gagner en rapidité d'affichage. Ici on supprime 99% des points tout en conservant la topologie (gestion des limites communes entre polygones pour éviter de créer des interstices ou des chevauchements).
 
