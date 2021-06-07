@@ -246,7 +246,7 @@ Sélection d'une fenêtre de coordonnées couvrant la France continentale et tra
 
 ```{r}
 pop_geo <- pop %>%
-  bind_cols(coords) %>%
+  left_join(coords) %>%
   filter(x_l93 > 100000,
          x_l93 < 1100000,
          y_l93 > 6100000,
