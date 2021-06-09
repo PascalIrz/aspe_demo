@@ -3,7 +3,7 @@
 *.RData
 *.Ruserdata
 *.Rproj
-*.html
+/scripts/*.html
 /raw_data
 /processed_data
 /assets
