@@ -1,5 +1,5 @@
 ---
-title: "Démonstrateur ASPE : Construction des briques élémentaires"
+title: "Démonstrateur ASPE : Construction des éléments non géographiques"
 author: "Pascal Irz"
 date: "`r format(Sys.time(), 'Le %d %B %Y')`"
 output: html_document
