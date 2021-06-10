@@ -19,14 +19,14 @@ library(tidyverse)
 
 ```{r, echo = FALSE}
 load(file = "../processed_data/captures.RData")
-load(file = "../processed_data/pop_geo.RData")
-load(file = "../processed_data/sh_geo.RData")
+load(file = "../raw_data/mei.RData")
+load(file = "../raw_data/toutes_tables_aspe_sauf_mei.RData")
 ```
 
 ```{r, eval = FALSE}
 load(file = "processed_data/captures.RData")
-load(file = "processed_data/pop_geo.RData")
-load(file = "processed_data/sh_geo.RData")
+load(file = "raw_data/mei.RData")
+load(file = "raw_data/toutes_tables_aspe_sauf_mei.RData")
 ```
 
 # Définition de la palette de couleurs
@@ -45,96 +45,189 @@ mon_theme <-
   )
 ```
 
-# Description d'ensemble des données
+# df1 : espèce - opération
 
->NB on parle ici des données qui ont été préparées auparavant, donc filtrées, et non de la totalité de ce qui est en base.
-
-## Carte du nb d'années de données par point
-
-Tableau de données qui sera visualisé avec `mapview`.
+## densité
 
 ```{r}
-nb_ope_par_pop <- captures %>%
-  group_by(pop_id, annee) %>% 
-    slice(1) %>%  # une seule opération par an
-  group_by(pop_id) %>% 
-    summarise(nb_ope = n_distinct(ope_id)) %>% 
-  ungroup() %>% 
-  left_join(y = pop_geo) %>% 
-  sf::st_as_sf()
+df1 <- captures %>% 
+  mutate(dens_ind_1000m2 = 1000 * effectif / ope_surface_calculee)
 ```
 
-## Evolution temporelle du nb annuel d'opérations
+## longueur des individus
 
-Tableau.
-
-```{r}
-nb_ope_par_an <- captures %>%
-  group_by(annee) %>% 
-    summarise(nb_ope_an = n_distinct(ope_id)) %>% 
-  ungroup()
-```
-
-Graphique.
+Calcul des longueurs mini, maxi, moyenne et médiane pour chaque espèce à chaque opération. 
 
 ```{r}
-g_nb_ope_par_an <- nb_ope_par_an %>% 
-  ggplot(aes(x = annee, y = nb_ope_an)) +
-    geom_line() +
-    labs(x = "", y = "Nb pêches complètes à pied réalisées en réseau")
-
-g_nb_ope_par_an +
-  mon_theme
-```
-
-## Nombre total d'opérations
-
-```{r}
-nb_ope_tot <- nb_ope_par_an %>% 
-  pull(nb_ope_an) %>% 
-  sum()
-```
-
-## Carte des points échantillonnés chaque année
-
-Tableau
-
-```{r}
-pop_prospectes_chaque_an <- captures %>% 
-  select(pop_id, pop_libelle, annee) %>% 
+longueurs <- mef_creer_passerelle() %>% 
+  mef_ajouter_lots() %>%
+  select(ope_id, lop_id, esp_code_alternatif) %>% 
   distinct() %>% 
-  left_join(y = pop_geo) %>% 
-  sf::st_as_sf()
+  right_join(y = mesure_individuelle %>%
+               rename(lop_id = mei_lop_id,
+                      tlo_id = mei_tlo_id)) %>% 
+  group_by(ope_id, esp_code_alternatif, tlo_id) %>% 
+    summarise(taille_max = max(mei_taille, na.rm = TRUE),
+              taille_min = min(mei_taille, na.rm = TRUE),
+              taille_moy = mean(mei_taille, na.rm = TRUE),
+              taille_med = median(mei_taille, na.rm = TRUE)) %>% 
+  ungroup() %>% 
+  left_join(y = ref_type_longueur) %>% 
+  select(ope_id, esp_code_alternatif, tlo_libelle, starts_with("taille_"))
 ```
 
-# Richesse spécifique
-
-## Nombre total d'espèces piscicoles
-
-Comme il y a des taxons dans la base qui ne sont pas des espèces piscicoles (hybrides, cristacés), il faut restreindre à l'intersection entre les codes présents dans les captures et ceux de la table `traits_poissons` contenue dans la package `{aspe}`.
+Ajout de ces longueurs 
 
 ```{r}
-captures <- captures %>% 
-  filter(esp_code_alternatif %in% traits_poissons$esp_code_alternatif) %>% 
-  droplevels()
+df1 <- df1 %>% 
+  left_join(longueurs) %>% 
+  select(-ope_surface_calculee)
 ```
 
+Visualisation d'un échantillon.
 
 ```{r}
-nb_sp_tot <- captures %>% 
-  pull(esp_code_alternatif) %>% 
-  n_distinct()
+df1 %>%
+  sample_n(10) %>%
+  DT::datatable() %>%
+  DT::formatRound(columns = c('dens_ind_1000m2', 'taille_moy'),
+                  digits = 2)
 ```
 
-## Nb d'espèces par bassin par an
+
+# df2 : peuplement - opération
 
 ```{r}
-# nb_esp_par_rh_par_an <- captures %>% 
-#   left_join(y = sh_geo) %>% 
-#   group_by(CdSecteurH, annee) %>% 
-#     summarise(nb_esp = n_distinct(esp_code_alternatif))
+df2 <- df1 %>% 
+  group_by(pop_id, ope_id, annee) %>% 
+    summarise(richesse = n_distinct(esp_code_alternatif),
+              effectif = sum(effectif, na.rm = TRUE),
+              dens_ind_1000m2 = sum(dens_ind_1000m2, na.rm = TRUE))
 ```
 
+Calcul des apparitions / dispartitions d'espèces. NB cette opération peut prendre plusieurs minutes.
 
+```{r}
+colo_ext <- df1 %>% 
+  mef_colo_ext_pops()
+```
+
+Visualisation pour un des points.
+
+```{r}
+colo_ext %>% 
+  filter(pop_id == 10603) %>% 
+  gg_colo_ext_pop()
+```
+
+df3 <- colo_ext %>% 
   
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!-- # Description d'ensemble des données -->
+
+<!-- >NB on parle ici des données qui ont été préparées auparavant, donc filtrées, et non de la totalité de ce qui est en base. -->
+
+<!-- ## Carte du nb d'années de données par point -->
+
+<!-- Tableau de données qui sera visualisé avec `mapview`. -->
+
+<!-- ```{r} -->
+<!-- nb_ope_par_pop <- captures %>% -->
+<!--   group_by(pop_id, annee) %>%  -->
+<!--     slice(1) %>%  # une seule opération par an -->
+<!--   group_by(pop_id) %>%  -->
+<!--     summarise(nb_ope = n_distinct(ope_id)) %>%  -->
+<!--   ungroup() %>%  -->
+<!--   left_join(y = pop_geo) %>%  -->
+<!--   sf::st_as_sf() -->
+<!-- ``` -->
+
+<!-- ## Evolution temporelle du nb annuel d'opérations -->
+
+<!-- Tableau. -->
+
+<!-- ```{r} -->
+<!-- nb_ope_par_an <- captures %>% -->
+<!--   group_by(annee) %>%  -->
+<!--     summarise(nb_ope_an = n_distinct(ope_id)) %>%  -->
+<!--   ungroup() -->
+<!-- ``` -->
+
+<!-- Graphique. -->
+
+<!-- ```{r} -->
+<!-- g_nb_ope_par_an <- nb_ope_par_an %>%  -->
+<!--   ggplot(aes(x = annee, y = nb_ope_an)) + -->
+<!--     geom_line() + -->
+<!--     labs(x = "", y = "Nb pêches complètes à pied réalisées en réseau") -->
+
+<!-- g_nb_ope_par_an + -->
+<!--   mon_theme -->
+<!-- ``` -->
+
+<!-- ## Nombre total d'opérations -->
+
+<!-- ```{r} -->
+<!-- nb_ope_tot <- nb_ope_par_an %>%  -->
+<!--   pull(nb_ope_an) %>%  -->
+<!--   sum() -->
+<!-- ``` -->
+
+<!-- ## Carte des points échantillonnés chaque année -->
+
+<!-- Tableau -->
+
+<!-- ```{r} -->
+<!-- pop_prospectes_chaque_an <- captures %>%  -->
+<!--   select(pop_id, pop_libelle, annee) %>%  -->
+<!--   distinct() %>%  -->
+<!--   left_join(y = pop_geo) %>%  -->
+<!--   sf::st_as_sf() -->
+<!-- ``` -->
+
+<!-- # Richesse spécifique -->
+
+<!-- ## Nombre total d'espèces piscicoles -->
+
+<!-- Comme il y a des taxons dans la base qui ne sont pas des espèces piscicoles (hybrides, cristacés), il faut restreindre à l'intersection entre les codes présents dans les captures et ceux de la table `traits_poissons` contenue dans la package `{aspe}`. -->
+
+<!-- ```{r} -->
+<!-- captures <- captures %>%  -->
+<!--   filter(esp_code_alternatif %in% traits_poissons$esp_code_alternatif) %>%  -->
+<!--   droplevels() -->
+<!-- ``` -->
+
+
+<!-- ```{r} -->
+<!-- nb_sp_tot <- captures %>%  -->
+<!--   pull(esp_code_alternatif) %>%  -->
+<!--   n_distinct() -->
+<!-- ``` -->
+
+<!-- ## Nb d'espèces par bassin par an -->
+
+<!-- ```{r} -->
+<!-- # nb_esp_par_rh_par_an <- captures %>%  -->
+<!-- #   left_join(y = sh_geo) %>%  -->
+<!-- #   group_by(CdSecteurH, annee) %>%  -->
+<!-- #     summarise(nb_esp = n_distinct(esp_code_alternatif)) -->
+<!-- ``` -->
+
+
+
 

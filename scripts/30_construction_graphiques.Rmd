@@ -30,7 +30,7 @@ load(file = "processed_data/captures.RData")
 ```
 
 ```{r}
-mon_pop <- "35803"
+mon_pop <- "10603"
 capt_mef_colo_ext <- mef_colo_ext_pop(df = captures,
                                       id_point = mon_pop)
 ```

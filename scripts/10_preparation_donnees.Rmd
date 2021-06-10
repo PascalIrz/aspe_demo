@@ -44,21 +44,30 @@ load(file = "../raw_data/toutes_tables_aspe_sauf_mei.RData")
 
 ## Assemblage et filtrage des données
 
-Le principe pour utiliser les tables de la base sql d'origine est de constituer un `dataframe` "passerelle" qui relie les tables d'origine par les identifiants de leurs objets (stations, points, opérations, lots, etc.). On peut ensuite compléter cette ossature par des jointures sur les champs contenant les identifiants. La démarche se retrouve systématiquement dans les traitements donc elle n'a été détaillée qu'une fois dans [ce tuto](https://rpubs.com/kamoke/713491).
+Le principe pour utiliser les tables de la base SQL d'origine est de constituer un `dataframe` "passerelle" qui relie les tables d'origine par les identifiants de leurs objets (stations, points, opérations, lots, etc.). On peut ensuite compléter cette ossature par des jointures sur les champs contenant les identifiants. La démarche se retrouve systématiquement dans les traitements donc elle n'a été détaillée qu'une fois dans [ce tuto](https://rpubs.com/kamoke/713491).
 
-On ne conserve que les pêches réalisées dans le cadre des réseaux, complètes et réalisées sans bateau, ce qui est simple avec les fonctions `mef_select_obj()`, `mef_select_proto()` et `mef_select_mop()`. On rajoute les dates de prospection et une variable `annee`, avec la fonction `mef_ajouter_ope_date()` pour permettre des agrégations annuelles.
+On rajoute :
 
-On ajoute enfin des données de captures au niveau des lots (sans les mesures individuelles) avec `mef_ajouter_lots()`.
+- les dates de prospection et une variable `annee`, avec la fonction `mef_ajouter_ope_date()` pour permettre des agrégations annuelles
+- les données de captures au niveau des lots (sans les mesures individuelles) avec `mef_ajouter_lots()`
+- etc.
 
 ```{r}
 data <- mef_creer_passerelle() %>% # création passerelle
-  mef_select_obj(objectif = 2:6) %>% # les obj 2 à 6 sont les réseaux
-  mef_select_proto(protocole = 1) %>% # pêches complètes
-  mef_select_mop(moyen_prospection = 1) %>% # à pied
   mef_ajouter_ope_date() %>%  # ajout date et année
   mef_ajouter_lots() %>%  # ajout des lots (effectif par espèce)
   mef_ajouter_surf_calc() %>%  # ajout des surfaces prospectées pour calculer les densités
   mef_ajouter_libelle() # ajout libellé du point de prélèvement
+```
+
+Si l'on souhaite ne conserver que les pêches réalisées dans le cadre des réseaux, complètes et réalisées sans bateau, c'est simple avec les fonctions `mef_select_obj()`, `mef_select_proto()` et `mef_select_mop()`. 
+
+
+```{r, eval = FALSE}
+data <- data %>% 
+  mef_select_obj(objectif = 2:6) %>% # les obj 2 à 6 sont les réseaux
+  mef_select_proto(protocole = 1) %>% # pêches complètes
+  mef_select_mop(moyen_prospection = 1) %>% # à pied
 ```
 
 ## Agrégation pour simplifier le tableau
@@ -306,8 +315,6 @@ Visualisation avec le package `ggplot2`.
 ```{r}
 ggplot(sh_geo) + geom_sf()
 ```
-
-
 
 # Sauvegarde des données préparées
 
