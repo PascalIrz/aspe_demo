@@ -89,6 +89,34 @@ captures %>%
   knitr::kable(align = "c")
 ```
 
+## Sélection des opérations
+
+Il existe des cas où un même point a été prospecté à plusieurs reprises la même année :
+
+```{r}
+captures %>% 
+  group_by(pop_id, pop_libelle, annee) %>% 
+    summarise(n_ope = n_distinct(ope_id)) %>% 
+  ungroup() %>%
+  filter(n_ope > 1) %>% 
+  arrange(-n_ope) %>% 
+  DT::datatable()
+```
+
+Pour éviter les biais d'échantillonnage dans les calculs ultérieurs, on filtre le tableau de données pour ne retenir qu'une des opérations dans ces cas. Retenons par exemple la dernière de l'année. Comme il y a quelques cas où plusieurs opérations sont enregistrées le même jour, on n'en retient qu'une.
+
+```{r}
+ope_sel <- captures %>% 
+  select(pop_id, ope_date, annee, ope_id) %>% 
+  group_by(pop_id, annee) %>%
+    filter(ope_date == max(ope_date)) %>% # dernière des dates de l'année
+    slice(1) %>% # une des opérations si plusieurs à cette date 
+  pull(ope_id)
+
+captures <- captures %>% 
+  filter(ope_id %in% ope_sel)
+```
+
 
 # Préparation des données spatiales
 
