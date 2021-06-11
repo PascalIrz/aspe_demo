@@ -60,14 +60,13 @@ data <- mef_creer_passerelle() %>% # création passerelle
   mef_ajouter_libelle() # ajout libellé du point de prélèvement
 ```
 
-Si l'on souhaite ne conserver que les pêches réalisées dans le cadre des réseaux, complètes et réalisées sans bateau, c'est simple avec les fonctions `mef_select_obj()`, `mef_select_proto()` et `mef_select_mop()`. 
-
+Si l'on souhaite ne conserver que les pêches réalisées dans le cadre des réseaux, complètes et réalisées sans bateau, c'est simple avec les fonctions `mef_select_obj()`, `mef_select_proto()` et `mef_select_mop()` : 
 
 ```{r, eval = FALSE}
 data <- data %>% 
   mef_select_obj(objectif = 2:6) %>% # les obj 2 à 6 sont les réseaux
   mef_select_proto(protocole = 1) %>% # pêches complètes
-  mef_select_mop(moyen_prospection = 1) %>% # à pied
+  mef_select_mop(moyen_prospection = 1) # à pied
 ```
 
 ## Agrégation pour simplifier le tableau
@@ -103,7 +102,7 @@ captures %>%
   DT::datatable()
 ```
 
-Pour éviter les biais d'échantillonnage dans les calculs ultérieurs, on filtre le tableau de données pour ne retenir qu'une des opérations dans ces cas. Retenons par exemple la dernière de l'année. Comme il y a quelques cas où plusieurs opérations sont enregistrées le même jour, on n'en retient qu'une.
+Pour éviter les biais d'échantillonnage dans les tendances, on filtre le tableau de données pour ne retenir qu'une des opérations dans ces cas. Retenons par exemple la dernière de l'année (pêche d'automne). Comme il y a même  quelques cas où plusieurs opérations sont enregistrées le même jour, on n'en retient qu'une.
 
 ```{r}
 ope_sel <- captures %>% 
@@ -347,13 +346,13 @@ ggplot(sh_geo) + geom_sf()
 # Sauvegarde des données préparées
 
 ```{r, echo = FALSE}
-save(captures, file = "../processed_data/captures.RData")
+save(captures, ope_sel, file = "../processed_data/captures.RData")
 save(pop_geo, file = "../processed_data/pop_geo.RData")
 save(depts_geo, regs_geo, sh_geo, rh_geo, dh_geo, file = "../processed_data/poly_geo_simp.RData")
 ```
 
 ```{r, eval = FALSE}
-save(captures, file = "processed_data/captures.RData")
+save(captures, ope_sel, file = "processed_data/captures.RData")
 save(pop_geo, file = "processed_data/pop_geo.RData")
 save(depts_geo, regs_geo, sh_geo, rh_geo, dh_geo, file = "processed_data/poly_geo_simp.RData")
 ```

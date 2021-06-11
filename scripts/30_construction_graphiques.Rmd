@@ -29,6 +29,23 @@ load(file = "processed_data/captures.RData")
 # load(file = "processed_data/sh_geo.RData")
 ```
 
+
+# Définition de la palette de couleurs
+
+```{r}
+coul_contrast <- RColorBrewer::brewer.pal(n = 8, name = "Dark2")
+coul_pastel <- RColorBrewer::brewer.pal(n = 8, name = "Pastel1")
+
+mon_theme <-
+  theme(
+    panel.background = element_rect(fill = coul_pastel[2]),
+    panel.grid.major = element_line(colour = coul_pastel[3]),
+    panel.grid.minor = element_line(colour = coul_pastel[3],
+                                    linetype = 'dotted',
+                                    size = 0.7)
+  )
+```
+
 ```{r}
 mon_pop <- "10603"
 capt_mef_colo_ext <- mef_colo_ext_pop(df = captures,

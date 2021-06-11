@@ -29,51 +29,41 @@ load(file = "raw_data/mei.RData")
 load(file = "raw_data/toutes_tables_aspe_sauf_mei.RData")
 ```
 
-# Définition de la palette de couleurs
-
-```{r}
-coul_contrast <- RColorBrewer::brewer.pal(n = 8, name = "Dark2")
-coul_pastel <- RColorBrewer::brewer.pal(n = 8, name = "Pastel1")
-
-mon_theme <-
-  theme(
-    panel.background = element_rect(fill = coul_pastel[2]),
-    panel.grid.major = element_line(colour = coul_pastel[3]),
-    panel.grid.minor = element_line(colour = coul_pastel[3],
-                                    linetype = 'dotted',
-                                    size = 0.7)
-  )
-```
 
 # df1 : espèce - opération
 
-## densité
+### densité
 
 ```{r}
 df1 <- captures %>% 
   mutate(dens_ind_1000m2 = 1000 * effectif / ope_surface_calculee)
 ```
 
-## longueur des individus
+### longueur des individus
 
-Calcul des longueurs mini, maxi, moyenne et médiane pour chaque espèce à chaque opération. 
+Calcul des longueurs mini, maxi, moyenne et médiane pour chaque espèce à chaque opération. Si le type de longueur n'est pas renseigné, on considère que c'est le cas le plus fréquent donc la longueur totale (`tlo_id = 2`).
 
 ```{r}
-longueurs <- mef_creer_passerelle() %>% 
+longueurs <- mef_creer_passerelle() %>%
   mef_ajouter_lots() %>%
-  select(ope_id, lop_id, esp_code_alternatif) %>% 
-  distinct() %>% 
+  select(ope_id, lop_id, esp_code_alternatif) %>%
+  distinct() %>%
   right_join(y = mesure_individuelle %>%
                rename(lop_id = mei_lop_id,
-                      tlo_id = mei_tlo_id)) %>% 
-  group_by(ope_id, esp_code_alternatif, tlo_id) %>% 
-    summarise(taille_max = max(mei_taille, na.rm = TRUE),
-              taille_min = min(mei_taille, na.rm = TRUE),
-              taille_moy = mean(mei_taille, na.rm = TRUE),
-              taille_med = median(mei_taille, na.rm = TRUE)) %>% 
-  ungroup() %>% 
-  left_join(y = ref_type_longueur) %>% 
-  select(ope_id, esp_code_alternatif, tlo_libelle, starts_with("taille_"))
+                      tlo_id = mei_tlo_id)) %>%
+  group_by(ope_id, esp_code_alternatif) %>%
+  summarise(
+    taille_max = max(mei_taille, na.rm = TRUE),
+    taille_min = min(mei_taille, na.rm = TRUE),
+    taille_moy = mean(mei_taille, na.rm = TRUE),
+    taille_med = median(mei_taille, na.rm = TRUE)
+  ) %>%
+  ungroup() %>%
+#  left_join(y = ref_type_longueur) %>%
+  select(ope_id,
+         esp_code_alternatif,
+ #        tlo_libelle,
+         starts_with("taille_"))
 ```
 
 Ajout de ces longueurs 
@@ -94,8 +84,9 @@ df1 %>%
                   digits = 2)
 ```
 
-
 # df2 : peuplement - opération
+
+### Agrégation
 
 ```{r}
 df2 <- df1 %>% 
@@ -105,129 +96,71 @@ df2 <- df1 %>%
               dens_ind_1000m2 = sum(dens_ind_1000m2, na.rm = TRUE))
 ```
 
-Calcul des apparitions / dispartitions d'espèces. NB cette opération peut prendre plusieurs minutes.
+### Apparitions / dispartitions d'espèces
 
-```{r}
+>NB cette opération sur l'ensemble de la base prend environ 15 minutes.
+
+```{r, eval = FALSE}
 colo_ext <- df1 %>% 
-  mef_colo_ext_pops()
+  mef_colo_ext_pops() %>% 
+  ungroup() %>% 
+  group_by(pop_id, annee) %>% 
+    summarise(n_colo = sum(col_ext == "colonisation"),
+              n_ext = sum(col_ext == "extinction"))
 ```
 
-Visualisation pour un des points.
+```{r, echo = FALSE}
+load(file = "../processed_data/colo_ext.RData")
+```
 
 ```{r}
-colo_ext %>% 
-  filter(pop_id == 10603) %>% 
-  gg_colo_ext_pop()
+df2 <- df2 %>% 
+  left_join(colo_ext, by = c("pop_id", "annee")) %>%
+  ungroup()
 ```
 
-df3 <- colo_ext %>% 
-  
+### IPR
+
+```{r}
+df2 <- df2 %>%
+  mef_ajouter_metriques() %>% 
+  mef_ajouter_ipr()
+```
+
+# df3 : espece - n opérations
+
+### Complétion du df
+
+Comme les données enregistrées dans la base sont les captures, les effectifs ne sont jamais nuls. Il faut donc compléter le tableau de données par espèce pour distinguer les années où il y a eu prospection sans capture de l'espèce des années où il n'y a pas eu prospection.
+
+```{r}
+df_prov <- df1 %>% 
+  select(pop_id, annee, esp_code_alternatif, effectif) %>%
+  mutate(esp_code_alternatif = as.character(esp_code_alternatif)) %>% 
+  group_by(pop_id) %>% 
+    complete(annee, esp_code_alternatif, fill = list(effectif = 0))
+
+df3 <- df_prov %>% 
+  group_by(esp_code_alternatif, annee) %>% 
+    summarise(n_pres = sum(effectif > 0, na.rm = T),
+              n_ech = n())
+
+
+```
 
 
 
 
+# Sauvegarde des dataframes
 
+```{r, echo = FALSE}
+save(colo_ext, file = "../processed_data/colo_ext.RData")
+save(df1, file = "../processed_data/df1.RData")
+save(df2, file = "../processed_data/df2.RData")
+```
 
-
-
-
-
-
-
-
-
-
-
-<!-- # Description d'ensemble des données -->
-
-<!-- >NB on parle ici des données qui ont été préparées auparavant, donc filtrées, et non de la totalité de ce qui est en base. -->
-
-<!-- ## Carte du nb d'années de données par point -->
-
-<!-- Tableau de données qui sera visualisé avec `mapview`. -->
-
-<!-- ```{r} -->
-<!-- nb_ope_par_pop <- captures %>% -->
-<!--   group_by(pop_id, annee) %>%  -->
-<!--     slice(1) %>%  # une seule opération par an -->
-<!--   group_by(pop_id) %>%  -->
-<!--     summarise(nb_ope = n_distinct(ope_id)) %>%  -->
-<!--   ungroup() %>%  -->
-<!--   left_join(y = pop_geo) %>%  -->
-<!--   sf::st_as_sf() -->
-<!-- ``` -->
-
-<!-- ## Evolution temporelle du nb annuel d'opérations -->
-
-<!-- Tableau. -->
-
-<!-- ```{r} -->
-<!-- nb_ope_par_an <- captures %>% -->
-<!--   group_by(annee) %>%  -->
-<!--     summarise(nb_ope_an = n_distinct(ope_id)) %>%  -->
-<!--   ungroup() -->
-<!-- ``` -->
-
-<!-- Graphique. -->
-
-<!-- ```{r} -->
-<!-- g_nb_ope_par_an <- nb_ope_par_an %>%  -->
-<!--   ggplot(aes(x = annee, y = nb_ope_an)) + -->
-<!--     geom_line() + -->
-<!--     labs(x = "", y = "Nb pêches complètes à pied réalisées en réseau") -->
-
-<!-- g_nb_ope_par_an + -->
-<!--   mon_theme -->
-<!-- ``` -->
-
-<!-- ## Nombre total d'opérations -->
-
-<!-- ```{r} -->
-<!-- nb_ope_tot <- nb_ope_par_an %>%  -->
-<!--   pull(nb_ope_an) %>%  -->
-<!--   sum() -->
-<!-- ``` -->
-
-<!-- ## Carte des points échantillonnés chaque année -->
-
-<!-- Tableau -->
-
-<!-- ```{r} -->
-<!-- pop_prospectes_chaque_an <- captures %>%  -->
-<!--   select(pop_id, pop_libelle, annee) %>%  -->
-<!--   distinct() %>%  -->
-<!--   left_join(y = pop_geo) %>%  -->
-<!--   sf::st_as_sf() -->
-<!-- ``` -->
-
-<!-- # Richesse spécifique -->
-
-<!-- ## Nombre total d'espèces piscicoles -->
-
-<!-- Comme il y a des taxons dans la base qui ne sont pas des espèces piscicoles (hybrides, cristacés), il faut restreindre à l'intersection entre les codes présents dans les captures et ceux de la table `traits_poissons` contenue dans la package `{aspe}`. -->
-
-<!-- ```{r} -->
-<!-- captures <- captures %>%  -->
-<!--   filter(esp_code_alternatif %in% traits_poissons$esp_code_alternatif) %>%  -->
-<!--   droplevels() -->
-<!-- ``` -->
-
-
-<!-- ```{r} -->
-<!-- nb_sp_tot <- captures %>%  -->
-<!--   pull(esp_code_alternatif) %>%  -->
-<!--   n_distinct() -->
-<!-- ``` -->
-
-<!-- ## Nb d'espèces par bassin par an -->
-
-<!-- ```{r} -->
-<!-- # nb_esp_par_rh_par_an <- captures %>%  -->
-<!-- #   left_join(y = sh_geo) %>%  -->
-<!-- #   group_by(CdSecteurH, annee) %>%  -->
-<!-- #     summarise(nb_esp = n_distinct(esp_code_alternatif)) -->
-<!-- ``` -->
-
-
-
-
+```{r, eval = FALSE}
+save(colo_ext, file = "processed_data/colo_ext.RData")
+save(df1, file = "processed_data/df1.RData")
+save(df2, file = "processed_data/df2.RData")
+```
