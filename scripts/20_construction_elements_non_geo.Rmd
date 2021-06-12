@@ -36,12 +36,13 @@ load(file = "raw_data/toutes_tables_aspe_sauf_mei.RData")
 
 ```{r}
 df1 <- captures %>% 
-  mutate(dens_ind_1000m2 = 1000 * effectif / ope_surface_calculee)
+  mutate(dens_ind_1000m2 = 1000 * effectif / ope_surface_calculee) %>% 
+  select(-ope_surface_calculee)
 ```
 
 ### longueur des individus
 
-Calcul des longueurs mini, maxi, moyenne et médiane pour chaque espèce à chaque opération. Si le type de longueur n'est pas renseigné, on considère que c'est le cas le plus fréquent donc la longueur totale (`tlo_id = 2`).
+Calcul des longueurs mini, maxi, moyenne et médiane pour chaque espèce à chaque opération. On ne tient pas compte du type de longueur (fourche ou totale).
 
 ```{r}
 longueurs <- mef_creer_passerelle() %>%
@@ -70,11 +71,42 @@ Ajout de ces longueurs
 
 ```{r}
 df1 <- df1 %>% 
-  left_join(longueurs) %>% 
-  select(-ope_surface_calculee)
+  left_join(longueurs) 
 ```
 
-Visualisation d'un échantillon.
+
+### Apparitions / dispartitions d'espèces
+
+Il s'agit ici de caractériser la dynamique - à l'échelle du point de prélèvement - des apparitions et disparitions d'espèces au fil du temps. On appelle ici colonisation le fait qu'une espèce soit capturée lors d'une opération alors qu'elle était absente lors de la précédente. A l'inverse, on désigne par le terme extinction l'absence d'une espèce dans l'échantillonnage alors qu'elle avait été capturée lors de la précédente prospection. 
+
+>NB cette opération sur l'ensemble de la base prend environ 15 minutes.
+
+```{r, echo = FALSE}
+load(file = "../processed_data/colo_ext1.RData")
+```
+
+
+```{r, eval = FALSE}
+colo_ext1 <- df1 %>%
+  mef_colo_ext_pops() %>%
+  ungroup()
+```
+
+
+```{r, eval = FALSE}
+save(colo_ext1, file = "processed_data/colo_ext1.RData")
+```
+
+
+
+```{r}
+df1 <- colo_ext1 %>%
+  select(-effectif) %>% 
+  left_join(y = df1)
+```
+
+
+### Visualisation d'un échantillon
 
 ```{r}
 df1 %>%
@@ -83,6 +115,7 @@ df1 %>%
   DT::formatRound(columns = c('dens_ind_1000m2', 'taille_moy'),
                   digits = 2)
 ```
+
 
 # df2 : peuplement - opération
 
@@ -93,38 +126,38 @@ df2 <- df1 %>%
   group_by(pop_id, ope_id, annee) %>% 
     summarise(richesse = n_distinct(esp_code_alternatif),
               effectif = sum(effectif, na.rm = TRUE),
-              dens_ind_1000m2 = sum(dens_ind_1000m2, na.rm = TRUE))
+              dens_ind_1000m2 = sum(dens_ind_1000m2, na.rm = TRUE)) %>% 
+  ungroup()
 ```
 
 ### Apparitions / dispartitions d'espèces
 
->NB cette opération sur l'ensemble de la base prend environ 15 minutes.
+Dénombrement des colonisations / extinction par point chaque année.
 
-```{r, eval = FALSE}
-colo_ext <- df1 %>% 
-  mef_colo_ext_pops() %>% 
-  ungroup() %>% 
-  group_by(pop_id, annee) %>% 
+```{r}
+colo_ext2 <- colo_ext1 %>%
+  group_by(annee, pop_id) %>%
     summarise(n_colo = sum(col_ext == "colonisation"),
-              n_ext = sum(col_ext == "extinction"))
+              n_ext = sum(col_ext == "extinction")) %>% 
+  ungroup()
 ```
 
-```{r, echo = FALSE}
-load(file = "../processed_data/colo_ext.RData")
-```
+Ajout au dataframe.
 
 ```{r}
 df2 <- df2 %>% 
-  left_join(colo_ext, by = c("pop_id", "annee")) %>%
-  ungroup()
+  left_join(colo_ext2)
 ```
 
 ### IPR
 
+Rajout des valeurs IPR, des métriques et des classes de qualité. Les autres variables (valeurs théoriques et observées des métriques) sont supprimées.
+
 ```{r}
 df2 <- df2 %>%
   mef_ajouter_metriques() %>% 
-  mef_ajouter_ipr()
+  mef_ajouter_ipr() %>% 
+  select(-(ner_theorique:dti_observe))
 ```
 
 # df3 : espece - n opérations
@@ -134,18 +167,26 @@ df2 <- df2 %>%
 Comme les données enregistrées dans la base sont les captures, les effectifs ne sont jamais nuls. Il faut donc compléter le tableau de données par espèce pour distinguer les années où il y a eu prospection sans capture de l'espèce des années où il n'y a pas eu prospection.
 
 ```{r}
-df_prov <- df1 %>% 
-  select(pop_id, annee, esp_code_alternatif, effectif) %>%
-  mutate(esp_code_alternatif = as.character(esp_code_alternatif)) %>% 
-  group_by(pop_id) %>% 
-    complete(annee, esp_code_alternatif, fill = list(effectif = 0))
+# df_prov <- df1 %>% 
+#   select(pop_id, annee, esp_code_alternatif, effectif) %>%
+#   mutate(esp_code_alternatif = as.character(esp_code_alternatif)) %>% 
+# #  group_by(pop_id) %>% 
+#     complete(pop_id, annee, esp_code_alternatif, fill = list(effectif = NA))
 
-df3 <- df_prov %>% 
+df3 <- df1 %>% 
   group_by(esp_code_alternatif, annee) %>% 
-    summarise(n_pres = sum(effectif > 0, na.rm = T),
-              n_ech = n())
+    summarise(n_pres = sum(effectif > 0, na.rm = T)) %>% 
+  ungroup() %>% 
+  complete(annee, esp_code_alternatif, fill = list(n_pres = 0))
 
-
+opes_par_an <- df1 %>% 
+  group_by(annee) %>% 
+    summarise(n_ope = n_distinct(ope_id)) %>% 
+  ungroup()
+  
+df3 <- df3 %>% 
+  left_join(y = opes_par_an) %>% 
+  mutate(pc_pres = 100 * n_pres / n_ope)
 ```
 
 

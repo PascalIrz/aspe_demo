@@ -260,9 +260,17 @@ ref_type_projection <- ref_type_projection %>%
 ```{r}
 pop <- point_prelevement %>%
   rename(sta_id = pop_sta_id) %>% # nécessaire pour la jointure de mef_ajouter_libelle
-  mef_ajouter_libelle() %>% 
-  geo_ajouter_crs(var_id_crs = "pop_typ_id") %>% 
-  select(pop_id, pop_libelle, pop_coordonnees_x, pop_coordonnees_y, typ_code_epsg)
+  mef_ajouter_libelle() %>%
+  left_join(y = station %>% select(sta_id, sta_code_sandre)) %>%
+  geo_ajouter_crs(var_id_crs = "pop_typ_id") %>%
+  select(
+    pop_id,
+    pop_libelle,
+    pop_coordonnees_x,
+    pop_coordonnees_y,
+    typ_code_epsg,
+    sta_code_sandre
+  )
 ```
 
 Conversion des coordonnées.
@@ -308,7 +316,7 @@ pop_geo <- pop_geo %>%
   geo_attribuer(poly_sf = sh_geo) %>% 
   geo_attribuer(poly_sf = rh_geo) %>% 
   geo_attribuer(poly_sf = dh_geo) %>% 
-  select(pop_id, pop_libelle,
+  select(pop_id, pop_libelle, sta_code_sandre,
          dept_num = INSEE_DEP, dept_lib = NOM_DEP,
          reg_num = INSEE_REG.y, reg_lib = NOM_REG,
          CdSecteurHy = CdSecteurH, LbSecteurHy = LbSecteurH,
