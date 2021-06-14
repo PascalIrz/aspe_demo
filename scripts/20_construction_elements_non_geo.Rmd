@@ -45,33 +45,8 @@ df1 <- captures %>%
 Calcul des longueurs mini, maxi, moyenne et médiane pour chaque espèce à chaque opération. On ne tient pas compte du type de longueur (fourche ou totale).
 
 ```{r}
-longueurs <- mef_creer_passerelle() %>%
-  mef_ajouter_lots() %>%
-  select(ope_id, lop_id, esp_code_alternatif) %>%
-  distinct() %>%
-  right_join(y = mesure_individuelle %>%
-               rename(lop_id = mei_lop_id,
-                      tlo_id = mei_tlo_id)) %>%
-  group_by(ope_id, esp_code_alternatif) %>%
-  summarise(
-    taille_max = max(mei_taille, na.rm = TRUE),
-    taille_min = min(mei_taille, na.rm = TRUE),
-    taille_moy = mean(mei_taille, na.rm = TRUE),
-    taille_med = median(mei_taille, na.rm = TRUE)
-  ) %>%
-  ungroup() %>%
-#  left_join(y = ref_type_longueur) %>%
-  select(ope_id,
-         esp_code_alternatif,
- #        tlo_libelle,
-         starts_with("taille_"))
-```
-
-Ajout de ces longueurs 
-
-```{r}
 df1 <- df1 %>% 
-  left_join(longueurs) 
+  mef_ajouter_stats_taille()
 ```
 
 
@@ -167,12 +142,6 @@ df2 <- df2 %>%
 Comme les données enregistrées dans la base sont les captures, les effectifs ne sont jamais nuls. Il faut donc compléter le tableau de données par espèce pour distinguer les années où il y a eu prospection sans capture de l'espèce des années où il n'y a pas eu prospection.
 
 ```{r}
-# df_prov <- df1 %>% 
-#   select(pop_id, annee, esp_code_alternatif, effectif) %>%
-#   mutate(esp_code_alternatif = as.character(esp_code_alternatif)) %>% 
-# #  group_by(pop_id) %>% 
-#     complete(pop_id, annee, esp_code_alternatif, fill = list(effectif = NA))
-
 df3 <- df1 %>% 
   group_by(esp_code_alternatif, annee) %>% 
     summarise(n_pres = sum(effectif > 0, na.rm = T)) %>% 
@@ -190,18 +159,148 @@ df3 <- df3 %>%
 ```
 
 
+# Paramètres environnementaux
+
+Les paramètres environnementaux peuvent être utilisés pour caractériser le macro-habitat des espèces. On peut par exemple calculer l'altitude moyenne des sites où une espèce a été détectée et l'interpréter en regard de l'altitude moyenne sites où elle n'a pas été détectée ou de celle des sites prospectés. Pour cet usage il est essentiel de ne conserver que les opérations réalisées dans un but d'inventaire, donc d'écarter les indices d'abondance qui, focalisés sur une des espèces, ne renseignent pas sur les autres.
+
+```{r}
+ref_protocole %>% knitr::kable()
+```
+
+Retenons les protocoles 1 à 3 (respectivement Pêche complète à un ou plusieurs passages, Pêche partielle par points dans les grands milieux et Pêche par ambiances). L'inclusion de la modalité 4 - Pêche partielle sur berge - est à débattre.
+
+Ces paramètres peuvent être trouvés soit dans la table `operation_ipr` car ils servent au calcul de l'indice, soit dans la table `point_prelevement`. Ici nous choisissons d'associer les paramètres à l'opération. S'ils sont manquants, on les complète à partir des informations de la table `point_prelevement`.
+
+Si l'on veut simplement compléter le tableau des captures avec les données environnementales, on utilise `mef_ajouter_ope_env()` :
+
+```{r,eval = FALSE}
+df1_env <- df1 %>% 
+  mef_ajouter_ope_env()
+```
+
+Si l'on veut comparer les caractéristiques des points de présence et d'absence d'une espèce donnée, on doit faire apparaître les absences dans les échantillons en complétant le tableau :
+
+```{r}
+captures_et_env <- df1 %>%
+  droplevels() %>% # à retirer à terme
+  select(ope_id, esp_code_alternatif, effectif, dens_ind_1000m2) %>% 
+  complete(ope_id,
+           esp_code_alternatif,
+           fill = list(effectif = 0,
+                       dens_ind_1000m2 = 0)) %>% 
+  left_join(y =  df1 %>%
+                  select(ope_id, annee) %>% 
+                  distinct()) %>% 
+  left_join(y = operation %>%
+              select(ope_id, pop_id = ope_pop_id)) %>% 
+  mef_ajouter_ope_env() %>% 
+  pivot_longer(
+    cols = distance_mer:temp_janvier,
+    names_to = "parametre",
+    values_to = "valeur",
+    values_drop_na = TRUE
+  )
+```
+
+```{r}
+mon_espece <- "TRF" 
+mon_parametre <- "altitude"
+
+captures_et_env %>% 
+  filter(esp_code_alternatif == mon_espece,
+         parametre == mon_parametre) %>% 
+  ggplot(aes(x = valeur, fill = effectif > 0)) +
+    geom_density(alpha = 0.1) +
+    labs(x = mon_parametre, y = "Densité", title = mon_espece)
+
+```
+
+Tout ça amène à manipuler des dataframes volumineux donc suggère de tester des alternatives
+
+
+```{r}
+ope_env <- df1 %>% 
+  select(ope_id, pop_id) %>% 
+  mef_ajouter_ope_env() %>% 
+  distinct() %>% 
+  pivot_longer(
+    cols = distance_mer:temp_janvier,
+    names_to = "parametre",
+    values_to = "valeur",
+    values_drop_na = TRUE)  
+  
+```
+
+```{r}
+mon_espece <- "TRF" 
+mon_parametre <- "altitude"
+
+data <- df1 %>% 
+  select(pop_id, ope_id, esp_code_alternatif, effectif, dens_ind_1000m2) %>%  
+  filter(esp_code_alternatif == mon_espece) %>%
+  left_join(ope_env) %>% 
+  complete(ope_id,
+           esp_code_alternatif,
+           fill = list(effectif = 0,
+                       dens_ind_1000m2 = 0)) %>% 
+  left_join(y =  df1 %>%
+                  select(ope_id, annee) %>% 
+                  distinct())
+  
+
+ggplot(data = data,
+       aes(x = valeur)) +
+    geom_density(alpha = 0.1) +
+    labs(x = mon_parametre, y = "Densité", title = mon_espece)
+
+data <- df1 %>%
+  droplevels() %>% # à retirer à terme
+  select(ope_id, esp_code_alternatif, effectif, dens_ind_1000m2) %>% 
+  complete(ope_id,
+           esp_code_alternatif,
+           fill = list(effectif = 0,
+                       dens_ind_1000m2 = 0)) %>% 
+  left_join(y =  df1 %>%
+                  select(ope_id, annee) %>% 
+                  distinct()) %>% 
+  left_join(y = operation %>%
+              select(ope_id, pop_id = ope_pop_id)) %>% 
+  mef_ajouter_ope_env() %>% 
+  pivot_longer(
+    cols = distance_mer:temp_janvier,
+    names_to = "parametre",
+    values_to = "valeur",
+    values_drop_na = TRUE
+  )
+
+mon_espece <- "TRF" 
+mon_parametre <- "altitude"
+
+captures_et_env %>% 
+  filter(esp_code_alternatif == mon_espece,
+         parametre == mon_parametre) %>% 
+  ggplot(aes(x = valeur, fill = effectif > 0)) +
+    geom_density(alpha = 0.1) +
+    labs(x = mon_parametre, y = "Densité", title = mon_espece)
+```
+
+
+
+
+
+
+
+
 
 
 # Sauvegarde des dataframes
 
 ```{r, echo = FALSE}
-save(colo_ext, file = "../processed_data/colo_ext.RData")
 save(df1, file = "../processed_data/df1.RData")
 save(df2, file = "../processed_data/df2.RData")
 ```
 
 ```{r, eval = FALSE}
-save(colo_ext, file = "processed_data/colo_ext.RData")
 save(df1, file = "processed_data/df1.RData")
 save(df2, file = "processed_data/df2.RData")
 ```

@@ -73,10 +73,19 @@ data <- data %>%
 
 ```{r}
 captures <- data %>%
-  group_by(sta_id, pop_id, ope_id, ope_date, annee, esp_code_alternatif,
-           ope_surface_calculee, pop_libelle) %>%
-    summarise(effectif = sum(lop_effectif, na.rm = TRUE)) %>%
-  ungroup()
+  group_by(
+    sta_id,
+    pop_id,
+    ope_id,
+    ope_date,
+    annee,
+    esp_code_alternatif,
+    ope_surface_calculee,
+    pop_libelle
+  ) %>%
+  summarise(effectif = sum(lop_effectif, na.rm = TRUE)) %>%
+  ungroup() %>%
+  droplevels()
 ```
 
 
@@ -94,7 +103,9 @@ Il existe des cas où un même point a été prospecté à plusieurs reprises la
 
 ```{r}
 captures %>% 
-  group_by(pop_id, pop_libelle, annee) %>% 
+  group_by(pop_id,
+           pop_libelle,
+           annee) %>% 
     summarise(n_ope = n_distinct(ope_id)) %>% 
   ungroup() %>%
   filter(n_ope > 1) %>% 
@@ -106,8 +117,12 @@ Pour éviter les biais d'échantillonnage dans les tendances, on filtre le table
 
 ```{r}
 ope_sel <- captures %>% 
-  select(pop_id, ope_date, annee, ope_id) %>% 
-  group_by(pop_id, annee) %>%
+  select(pop_id,
+         ope_date,
+         annee,
+         ope_id) %>% 
+  group_by(pop_id,
+           annee) %>%
     filter(ope_date == max(ope_date)) %>% # dernière des dates de l'année
     slice(1) %>% # une des opérations si plusieurs à cette date 
   pull(ope_id)
@@ -261,7 +276,8 @@ ref_type_projection <- ref_type_projection %>%
 pop <- point_prelevement %>%
   rename(sta_id = pop_sta_id) %>% # nécessaire pour la jointure de mef_ajouter_libelle
   mef_ajouter_libelle() %>%
-  left_join(y = station %>% select(sta_id, sta_code_sandre)) %>%
+  left_join(y = station %>%
+              select(sta_id, sta_code_sandre)) %>%
   geo_ajouter_crs(var_id_crs = "pop_typ_id") %>%
   select(
     pop_id,
@@ -316,7 +332,9 @@ pop_geo <- pop_geo %>%
   geo_attribuer(poly_sf = sh_geo) %>% 
   geo_attribuer(poly_sf = rh_geo) %>% 
   geo_attribuer(poly_sf = dh_geo) %>% 
-  select(pop_id, pop_libelle, sta_code_sandre,
+  select(pop_id,
+         pop_libelle,
+         sta_code_sandre,
          dept_num = INSEE_DEP, dept_lib = NOM_DEP,
          reg_num = INSEE_REG.y, reg_lib = NOM_REG,
          CdSecteurHy = CdSecteurH, LbSecteurHy = LbSecteurH,

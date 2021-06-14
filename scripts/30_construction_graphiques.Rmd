@@ -18,15 +18,13 @@ library(tidyverse)
 
 
 ```{r, echo = FALSE}
-load(file = "../processed_data/captures.RData")
-# load(file = "../processed_data/pop_geo.RData")
-# load(file = "../processed_data/sh_geo.RData")
+load(file = "../processed_data/df1.RData")
+load(file = "../processed_data/df2.RData")
 ```
 
 ```{r, eval = FALSE}
-load(file = "processed_data/captures.RData")
-# load(file = "processed_data/pop_geo.RData")
-# load(file = "processed_data/sh_geo.RData")
+load(file = "processed_data/df1.RData")
+load(file = "processed_data/df2.RData")
 ```
 
 
@@ -48,13 +46,20 @@ mon_theme <-
 
 ```{r}
 mon_pop <- "10603"
-capt_mef_colo_ext <- mef_colo_ext_pop(df = captures,
-                                      id_point = mon_pop)
+capt_mef_colo_ext <- mef_colo_ext_pops(df = df1,
+                                       id_point = mon_pop)
 ```
 
 
 
 ```{r}
 gg_colo_ext_pop(capt_mef_colo_ext)
+```
+```{r}
+
+```
+
+```{r}
+
 ```
 
