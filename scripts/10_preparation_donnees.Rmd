@@ -60,14 +60,21 @@ data <- mef_creer_passerelle() %>% # création passerelle
   mef_ajouter_libelle() # ajout libellé du point de prélèvement
 ```
 
-Si l'on souhaite ne conserver que les pêches réalisées dans le cadre des réseaux, complètes et réalisées sans bateau, c'est simple avec les fonctions `mef_select_obj()`, `mef_select_proto()` et `mef_select_mop()` : 
+Ici on souhaite ne conserver que les pêches réalisées dans le cadre des réseaux, c'est simple avec les fonctions `mef_select_obj()` : 
+
+```{r, eval}
+data <- data %>% 
+  mef_select_obj(objectif = c(3, 6)) # obj 3=RCS et 6=RHP
+```
+
+On pourrait aussi restreindre le jeu de données par exemple aux pêches complètes et réalisées sans bateau avec les fonctions `mef_select_proto()` et `mef_select_mop()` (code non exécuté ici).
 
 ```{r, eval = FALSE}
 data <- data %>% 
-  mef_select_obj(objectif = 2:6) %>% # les obj 2 à 6 sont les réseaux
   mef_select_proto(protocole = 1) %>% # pêches complètes
   mef_select_mop(moyen_prospection = 1) # à pied
 ```
+
 
 ## Agrégation pour simplifier le tableau
 

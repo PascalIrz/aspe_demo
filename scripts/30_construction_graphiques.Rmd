@@ -2,7 +2,10 @@
 title: "Démonstrateur ASPE : Eléments Peuplement 1 point"
 author: "Pascal Irz"
 date: "`r format(Sys.time(), 'Le %d %B %Y')`"
-output: html_document
+output:
+  html_document:
+    toc: true
+    toc_float: true
 ---
   
 ```{r setup, include=FALSE}
@@ -60,6 +63,109 @@ gg_colo_ext_pop(capt_mef_colo_ext)
 ```
 
 ```{r}
+esp_communes <- pres_abs_env %>% 
+  filter(presences > 1000) %>% 
+  pull(esp_code_alternatif) %>% 
+  unique %>% 
+  as.character
+
+captures_et_env <- captures_et_env %>% 
+  filter(esp_code_alternatif %in% esp_communes)
+```
+
+
+```{r}
+gg_density_env_pres_abs <- function(df, espece, parametre) 
+  
+{
+  
+  df %>% 
+  filter(esp_code_alternatif == espece,
+         parametre == parametre) %>% 
+  ggplot(aes(x = valeur_parametre,
+             fill = presence)) +
+    geom_density(alpha = 0.1) +
+    labs(x = parametre,
+         y = "Densité",
+         title = espece)
+  
+}
+
+gg_density_env_pres_abs(df = captures_et_env,
+                        espece = "BRO",
+                        parametre = "altitude")
 
 ```
+
+
+
+
+
+```{r, fig.width = 10, fig.height = 10}
+
+
+gg_evol_env_esp <- function(df, parametre)
+  
+{
+  
+df %>% 
+  filter(parametre == parametre) %>% 
+  ggplot(aes(x = annee, y = valeur_parametre, col = presence)) +
+    geom_smooth(method = "lm") +
+    labs(x = "", y = parametre) +
+    scale_x_continuous(limits = c(1995, NA)) +
+    facet_wrap(~esp_code_alternatif,
+               scales = "free_y", ncol = 5)
+  
+}
+
+parametres <- captures_et_env %>% 
+  pull(parametre) %>% 
+  unique
+
+map(.x = parametres,
+    .f = gg_evol_env_esp,
+    df = captures_et_env)
+
+```
+
+Est-ce que les caractéristiques des sites prospectés ont changé au fil des années ?
+
+```{r}
+env <- df1 %>%
+         select(ope_id, annee) %>%
+         distinct() %>%
+  left_join(y = operation %>%
+              select(ope_id, pop_id = ope_pop_id)) %>% 
+  mef_ajouter_ope_env() %>% 
+  pivot_longer(
+    cols = distance_mer:temp_janvier,
+    names_to = "parametre",
+    values_to = "valeur_parametre",
+    values_drop_na = TRUE
+  )
+
+env %>% 
+  ggplot(aes(x = annee, y = valeur_parametre)) +
+    #geom_boxplot(coef=1e30) +
+   geom_smooth(method = "gam") +
+    labs(x = "") +
+    scale_x_continuous(limits = c(1990, NA)) +
+    facet_wrap(~parametre,
+               scales = "free_y",
+               ncol = 4)
+```
+
+
+```{r}
+env %>% 
+ # filter(parametre == mon_parametre) %>% 
+  ggplot(aes(x = valeur_parametre, y = as.factor(annee))) +
+    ggridges::geom_density_ridges() +
+ #   labs(x = parametre) +
+    facet_wrap(~parametre,
+               scales = "free_x")
+```
+
+
 

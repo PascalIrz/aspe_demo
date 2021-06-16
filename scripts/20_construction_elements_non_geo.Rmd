@@ -2,7 +2,10 @@
 title: "Démonstrateur ASPE : Construction des éléments non géographiques"
 author: "Pascal Irz"
 date: "`r format(Sys.time(), 'Le %d %B %Y')`"
-output: html_document
+output:
+  html_document:
+    toc: true
+    toc_float: true
 ---
   
 ```{r setup, include=FALSE}
@@ -63,16 +66,14 @@ load(file = "../processed_data/colo_ext1.RData")
 
 ```{r, eval = FALSE}
 colo_ext1 <- df1 %>%
-  mef_colo_ext_pops() %>%
-  ungroup()
+  mef_colo_ext_pops()
 ```
 
+Comme c'est long, il peut être utile de sauvegarder le résultat de ce traitement. 
 
 ```{r, eval = FALSE}
 save(colo_ext1, file = "processed_data/colo_ext1.RData")
 ```
-
-
 
 ```{r}
 df1 <- colo_ext1 %>%
@@ -182,231 +183,53 @@ Si l'on veut comparer les caractéristiques des points de présence et d'absence
 
 ```{r}
 captures_et_env <- df1 %>%
-  droplevels() %>% # à retirer à terme
-  select(ope_id, esp_code_alternatif, effectif, dens_ind_1000m2) %>% 
-  complete(ope_id,
-           esp_code_alternatif,
-           fill = list(effectif = 0,
-                       dens_ind_1000m2 = 0)) %>% 
-  left_join(y =  df1 %>%
-                  select(ope_id, annee) %>% 
-                  distinct()) %>% 
-  left_join(y = operation %>%
-              select(ope_id, pop_id = ope_pop_id)) %>% 
-  mef_ajouter_ope_env() %>% 
-  filter(!(temp_juillet == -99 & temp_janvier == -99)) %>%  # codage valeurs manquantes
-  pivot_longer(
-    cols = distance_mer:temp_janvier,
-    names_to = "parametre",
-    values_to = "valeur_parametre",
-    values_drop_na = TRUE
-  ) %>% 
+  mef_select_proto(protocole = 1:3) %>% 
+  mef_ajouter_abs() %>% 
+  mef_ajouter_ope_env() %>%
+  mef_pivoter_var_env() %>% 
   mutate(presence = effectif > 0)
 ```
 
-Le tableau ainsi produit est volumineux (`r rnow(captures_et_env)` lignes). S'agissant de metttre les caractéristiques des sites de "présence" en regard de celles des sites d'"absence" de chacun des taxons, il n'est pas utile de disposer de plus d'observations d'absence que d'observations de présence. Or pour les espèces rares, le tableau comprend quelques observations de présence et beaucoup d'absence. On peut donc sous-échantillonner ces dernières.
+Le tableau ainsi produit est volumineux (`r nrow(captures_et_env)` lignes). S'agissant de metttre les caractéristiques des sites de "présence" en regard de celles des sites d'"absence" de chacun des taxons, il n'est pas utile de disposer de plus d'observations d'absence que d'observations de présence. Or pour les espèces rares, le tableau comprend quelques observations de présence et beaucoup d'absence. On peut donc sous-échantillonner ces dernières.
 
 ```{r}
-occurrences <- captures_et_env  %>% 
-  filter(!is.na(valeur_parametre)) %>% 
-  group_by(esp_code_alternatif, presence, parametre) %>% 
-    tally() %>% 
-  ungroup() %>% 
-  pivot_wider(id_cols = esp_code_alternatif:parametre, names_from = presence, values_from = n) %>% 
-  rename(presences = `TRUE`, absences = `FALSE`)
+pres_abs_env <- captures_et_env  %>%
+  mef_compter_pres_abs_env()
 
-occurrences
+pres_abs_env %>% DT::datatable()
 ```
 
-On peut considérer que cette partie de l'analyse n'a de sens que pour les espèces suffisamment présentes - par exemple à partir de n = 30 - et que l'on peut effectuer un sous-échantillonnage des absence à concurrence du nombre des présences. Il faut aussi tenir compte des données manquantes dans les variables environnementales, donc le chiffre de 30 doit s'entendre "minimum 30 sites où l'espèce est présente et pour lesquels la variable ... est disponible".
+On peut considérer que cette partie de l'analyse n'a de sens que pour les espèces suffisamment présentes - par exemple à partir de n = 30 - et que l'on peut effectuer un sous-échantillonnage des absences à concurrence du nombre des présences. Il faut aussi tenir compte des données manquantes dans les variables environnementales, donc le chiffre de 30 doit s'entendre "minimum 30 sites où l'espèce est présente et pour lesquels la variable ... est disponible".
+
+
 
 ```{r}
 # filtrage des espèces communes
-especes_param_communs <- occurrences %>% 
+especes_param_communs <- pres_abs_env %>% 
   filter(presences > 30) %>%
-  select(esp_code_alternatif, parametre)
+  select(esp_code_alternatif,
+         parametre)
 
 captures_et_env <- captures_et_env %>%
   right_join(y = especes_param_communs) %>% 
   droplevels()
+```
 
-# split des données en dataframes selon espece x presence / absence
-captures_et_env_nested <- captures_et_env %>%
-  group_by(esp_code_alternatif, presence, parametre) %>% 
-  nest() %>% 
-  ungroup() %>% 
-    left_join(y = occurrences %>% 
-              select(esp_code_alternatif, parametre, presences),
-            by = c("esp_code_alternatif", "parametre"))
+Sous-échantillonnage (la fonction `mef_ssech_abs()` est une adaptation de [cette page](https://jennybc.github.io/purrr-tutorial/ls12_different-sized-samples.html)).
 
-set.seed = 123
-
-# sous-échantillonnage
-captures_et_env_ssech <- captures_et_env_nested %>%
-  mutate(ssech = map2(.x = data,
-                      .y = presences,
-                      .f = sample_n,
-                      replace = TRUE))
-
-# assemblage
-captures_et_env <- captures_et_env_ssech %>% 
-  select(-data) %>%
-  unnest(ssech)
-
-# allègement du dataframe
+```{r}
 captures_et_env <- captures_et_env %>% 
-  select(-presences, -dens_ind_1000m2, -effectif) %>% 
-  mutate(parametre = as.factor(parametre),
-         annee = as.integer(annee))
+  mef_ssech_abs() %>% 
+  select(-dens_ind_1000m2) # histoire d'alléger un peu
 ```
 
 Vérification :
 
 ```{r}
-occurrences <- captures_et_env  %>% 
-  group_by(esp_code_alternatif, presence, parametre) %>% 
-    tally() %>% 
-  ungroup() %>% 
-  pivot_wider(id_cols = esp_code_alternatif:parametre, names_from = presence, values_from = n) %>% 
-  rename(presences = `TRUE`, absences = `FALSE`)
-
-occurrences
+captures_et_env  %>% 
+  mef_compter_pres_abs_env() %>% 
+  DT::datatable()
 ```
-
-
-```{r}
-mon_espece <- "TRF" 
-mon_parametre <- "altitude"
-
-captures_et_env %>% 
-  filter(esp_code_alternatif == mon_espece,
-         parametre == mon_parametre) %>% 
-  ggplot(aes(x = valeur_parametre, fill = presence)) +
-    geom_density(alpha = 0.1) +
-    labs(x = mon_parametre, y = "Densité", title = mon_espece)
-
-```
-
-```{r}
-esp_communes <- occurrences %>% 
-  filter(presences > 1000) %>% 
-  pull(esp_code_alternatif) %>% 
-  unique %>% 
-  as.character
-mon_parametre <- "temp_juillet"
-mon_parametre <- "distance_mer"
-
-captures_et_env %>% 
-  filter(esp_code_alternatif %in% esp_communes,
-         parametre == mon_parametre) %>% 
-  ggplot(aes(x = annee, y = valeur_parametre, col = presence)) +
-    geom_smooth(method = "lm") +
-    labs(x = "", y = mon_parametre, title = mon_espece) +
-    scale_x_continuous(limits = c(1995, NA)) +
-    facet_wrap(~esp_code_alternatif, scales = "free_y")
-```
-
-Est-ce que les caractéristiques des sites prospectés ont changé au fil des années ?
-
-```{r}
-env <- df1 %>%
-         select(ope_id, annee) %>%
-         distinct() %>%
-  left_join(y = operation %>%
-              select(ope_id, pop_id = ope_pop_id)) %>% 
-  mef_ajouter_ope_env() %>% 
-  pivot_longer(
-    cols = distance_mer:temp_janvier,
-    names_to = "parametre",
-    values_to = "valeur_parametre",
-    values_drop_na = TRUE
-  )
-
-env %>% 
-  ggplot(aes(x = as.factor(annee), y = valeur_parametre)) +
-    #geom_boxplot(coef=1e30) +
-   geom_smooth() +
-    labs(x = "") +
-  #  scale_x_continuous(limits = c(1980, NA)) +
-    facet_wrap(~parametre, scales = "free_y")
-
-env %>% 
- # filter(parametre == mon_parametre) %>% 
-  ggplot(aes(x = valeur_parametre, y = as.factor(annee))) +
-    ggridges::geom_density_ridges() +
- #   labs(x = parametre) +
-    facet_wrap(~parametre, scales = "free_x")
-```
-
-
-```{r}
-# ope_env <- df1 %>% 
-#   select(ope_id, pop_id) %>% 
-#   mef_ajouter_ope_env() %>% 
-#   distinct() %>% 
-#   pivot_longer(
-#     cols = distance_mer:temp_janvier,
-#     names_to = "parametre",
-#     values_to = "valeur",
-#     values_drop_na = TRUE)  
-  
-```
-
-```{r}
-mon_espece <- "TRF" 
-mon_parametre <- "altitude"
-
-data <- df1 %>% 
-  select(pop_id, ope_id, esp_code_alternatif, effectif, dens_ind_1000m2) %>%  
-  filter(esp_code_alternatif == mon_espece) %>%
-  left_join(ope_env) %>% 
-  complete(ope_id,
-           esp_code_alternatif,
-           fill = list(effectif = 0,
-                       dens_ind_1000m2 = 0)) %>% 
-  left_join(y =  df1 %>%
-                  select(ope_id, annee) %>% 
-                  distinct())
-  
-
-ggplot(data = data,
-       aes(x = valeur)) +
-    geom_density(alpha = 0.1) +
-    labs(x = mon_parametre, y = "Densité", title = mon_espece)
-
-data <- df1 %>%
-  droplevels() %>% # à retirer à terme
-  select(ope_id, esp_code_alternatif, effectif, dens_ind_1000m2) %>% 
-  complete(ope_id,
-           esp_code_alternatif,
-           fill = list(effectif = 0,
-                       dens_ind_1000m2 = 0)) %>% 
-  left_join(y =  df1 %>%
-                  select(ope_id, annee) %>% 
-                  distinct()) %>% 
-  left_join(y = operation %>%
-              select(ope_id, pop_id = ope_pop_id)) %>% 
-  mef_ajouter_ope_env() %>% 
-  pivot_longer(
-    cols = distance_mer:temp_janvier,
-    names_to = "parametre",
-    values_to = "valeur",
-    values_drop_na = TRUE
-  )
-
-mon_espece <- "TRF" 
-mon_parametre <- "altitude"
-
-captures_et_env %>% 
-  filter(esp_code_alternatif == mon_espece,
-         parametre == mon_parametre) %>% 
-  ggplot(aes(x = valeur, fill = effectif > 0)) +
-    geom_density(alpha = 0.1) +
-    labs(x = mon_parametre, y = "Densité", title = mon_espece)
-```
-
-
-
 
 
 
@@ -419,9 +242,11 @@ captures_et_env %>%
 ```{r, echo = FALSE}
 save(df1, file = "../processed_data/df1.RData")
 save(df2, file = "../processed_data/df2.RData")
+save(df2, file = "../processed_data/captures_et_env.RData")
 ```
 
 ```{r, eval = FALSE}
 save(df1, file = "processed_data/df1.RData")
 save(df2, file = "processed_data/df2.RData")
+save(df2, file = "processed_data/captures_et_env.RData")
 ```
