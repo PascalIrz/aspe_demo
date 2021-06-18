@@ -23,11 +23,13 @@ library(tidyverse)
 ```{r, echo = FALSE}
 load(file = "../processed_data/df1.RData")
 load(file = "../processed_data/df2.RData")
+load(file = "../processed_data/captures_et_env.RData")
 ```
 
 ```{r, eval = FALSE}
 load(file = "processed_data/df1.RData")
 load(file = "processed_data/df2.RData")
+load(file = "processed_data/captures_et_env.RData")
 ```
 
 
@@ -56,7 +58,7 @@ capt_mef_colo_ext <- mef_colo_ext_pops(df = df1,
 
 
 ```{r}
-gg_colo_ext_pop(capt_mef_colo_ext)
+gg_colo_ext_pops(capt_mef_colo_ext)
 ```
 ```{r}
 
@@ -75,28 +77,70 @@ captures_et_env <- captures_et_env %>%
 
 
 ```{r}
-gg_density_env_pres_abs <- function(df, espece, parametre) 
+gg_density_env_pres_abs_nparam <- function(df, espece, parametres = NA, quantile_max = 0.99,
+                                           log = c('surface_bv', 'distance_source', 'pente'))
   
 {
   
-  df %>% 
+  if (is.na(parametres))
+{
+  parametres <- df %>%
+    pull(parametre) %>%
+    unique() %>% 
+    as.character
+  }
+
+gg_density_env_pres_abs <- function(parametre, df, espece) 
+  
+{
+  data <- df %>% 
   filter(esp_code_alternatif == espece,
-         parametre == parametre) %>% 
-  ggplot(aes(x = valeur_parametre,
+         parametre == !!parametre)  # force l'évaluation en premier lieu / synonymie
+  
+  x_max <- data %>% 
+    pull(valeur_parametre) %>% 
+    quantile(probs = c(quantile_max))
+  
+plot <-
+  ggplot(data = data,
+         aes(x = valeur_parametre,
              fill = presence)) +
     geom_density(alpha = 0.1) +
     labs(x = parametre,
          y = "Densité",
-         title = espece)
+         title = espece) +
+    scale_x_continuous(limits = c(NA, x_max))
+
+if(!!parametre %in% log) {
+  plot <- plot + scale_x_log10()
+}
+
+plot
+    
   
 }
 
-gg_density_env_pres_abs(df = captures_et_env,
-                        espece = "BRO",
-                        parametre = "altitude")
 
+
+map(.x = parametres,
+    .f = gg_density_env_pres_abs,
+    df = df,
+    espece = espece)
+}
 ```
 
+```{r}
+gg_density_env_pres_abs(df = captures_et_env,
+                        espece = "BRE",
+                        parametre = "altitude")
+```
+
+
+```{r}
+gg_density_env_pres_abs_nparam(df = captures_et_env,
+                        espece = "BRE")
+
+```
 
 
 
