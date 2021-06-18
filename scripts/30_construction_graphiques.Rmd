@@ -24,12 +24,14 @@ library(tidyverse)
 load(file = "../processed_data/df1.RData")
 load(file = "../processed_data/df2.RData")
 load(file = "../processed_data/captures_et_env.RData")
+load(file = "../raw_data/toutes_tables_aspe_sauf_mei.RData")
 ```
 
 ```{r, eval = FALSE}
 load(file = "processed_data/df1.RData")
 load(file = "processed_data/df2.RData")
 load(file = "processed_data/captures_et_env.RData")
+load(file = "raw_data/toutes_tables_aspe_sauf_mei.RData")
 ```
 
 
@@ -60,13 +62,14 @@ capt_mef_colo_ext <- mef_colo_ext_pops(df = df1,
 ```{r}
 gg_colo_ext_pops(capt_mef_colo_ext)
 ```
-```{r}
 
-```
 
 ```{r}
-esp_communes <- pres_abs_env %>% 
-  filter(presences > 1000) %>% 
+esp_communes <- captures_et_env %>%
+  group_by(esp_code_alternatif) %>% 
+    summarise(n_pres = sum(presence)) %>% 
+  ungroup() %>% 
+  filter(n_pres > 1000) %>% 
   pull(esp_code_alternatif) %>% 
   unique %>% 
   as.character
@@ -76,70 +79,15 @@ captures_et_env <- captures_et_env %>%
 ```
 
 
-```{r}
-gg_density_env_pres_abs_nparam <- function(df, espece, parametres = NA, quantile_max = 0.99,
-                                           log = c('surface_bv', 'distance_source', 'pente'))
-  
-{
-  
-  if (is.na(parametres))
-{
-  parametres <- df %>%
-    pull(parametre) %>%
-    unique() %>% 
-    as.character
-  }
 
-gg_density_env_pres_abs <- function(parametre, df, espece) 
-  
-{
-  data <- df %>% 
-  filter(esp_code_alternatif == espece,
-         parametre == !!parametre)  # force l'évaluation en premier lieu / synonymie
-  
-  x_max <- data %>% 
-    pull(valeur_parametre) %>% 
-    quantile(probs = c(quantile_max))
-  
-plot <-
-  ggplot(data = data,
-         aes(x = valeur_parametre,
-             fill = presence)) +
-    geom_density(alpha = 0.1) +
-    labs(x = parametre,
-         y = "Densité",
-         title = espece) +
-    scale_x_continuous(limits = c(NA, x_max))
+```{r, fig.width = 10, fig.length = 10}
+plots <- captures_et_env %>%
+ # mutate(presence = ifelse(presence, "Présence", "Absence")) %>% 
+  gg_density_env_esp(espece = "BRE")
 
-if(!!parametre %in% log) {
-  plot <- plot + scale_x_log10()
-}
-
-plot
-    
-  
-}
-
-
-
-map(.x = parametres,
-    .f = gg_density_env_pres_abs,
-    df = df,
-    espece = espece)
-}
-```
-
-```{r}
-gg_density_env_pres_abs(df = captures_et_env,
-                        espece = "BRE",
-                        parametre = "altitude")
-```
-
-
-```{r}
-gg_density_env_pres_abs_nparam(df = captures_et_env,
-                        espece = "BRE")
-
+ggpubr::ggarrange(plotlist = plots,
+                  ncol = 3,
+                  common.legend = TRUE)
 ```
 
 
@@ -148,16 +96,19 @@ gg_density_env_pres_abs_nparam(df = captures_et_env,
 ```{r, fig.width = 10, fig.height = 10}
 
 
-gg_evol_env_esp <- function(df, parametre)
+gg_evol_env_esp <- function(df, parametre, coul_pres = "blue", coul_abs = "red")
   
 {
   
 df %>% 
   filter(parametre == parametre) %>% 
+  mutate(presence = ifelse(presence, "Présence", "Absence")) %>% 
   ggplot(aes(x = annee, y = valeur_parametre, col = presence)) +
     geom_smooth(method = "lm") +
     labs(x = "", y = parametre) +
     scale_x_continuous(limits = c(1995, NA)) +
+    scale_y_continuous(limits = c(0, NA)) +
+    scale_fill_manual(values = c(coul_pres, coul_abs)) +
     facet_wrap(~esp_code_alternatif,
                scales = "free_y", ncol = 5)
   
@@ -165,15 +116,16 @@ df %>%
 
 parametres <- captures_et_env %>% 
   pull(parametre) %>% 
-  unique
+  unique %>% 
+  as.character
 
-map(.x = parametres,
+map(.x = parametres[1],
     .f = gg_evol_env_esp,
     df = captures_et_env)
 
 ```
 
-Est-ce que les caractéristiques des sites prospectés ont changé au fil des années ?
+Les caractéristiques des sites prospectés ont-elles changé au fil des années ?
 
 ```{r}
 env <- df1 %>%

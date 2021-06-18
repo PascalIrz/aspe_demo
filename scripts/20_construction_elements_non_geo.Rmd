@@ -242,11 +242,11 @@ captures_et_env  %>%
 ```{r, echo = FALSE}
 save(df1, file = "../processed_data/df1.RData")
 save(df2, file = "../processed_data/df2.RData")
-save(df2, file = "../processed_data/captures_et_env.RData")
+save(captures_et_env, file = "../processed_data/captures_et_env.RData")
 ```
 
 ```{r, eval = FALSE}
 save(df1, file = "processed_data/df1.RData")
 save(df2, file = "processed_data/df2.RData")
-save(df2, file = "processed_data/captures_et_env.RData")
+save(captures_et_env, file = "processed_data/captures_et_env.RData")
 ```
