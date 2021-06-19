@@ -78,22 +78,21 @@ captures_et_env <- captures_et_env %>%
   filter(esp_code_alternatif %in% esp_communes)
 ```
 
+Pour visualiser l'influence des facteurs environnementaux sur la distribution des espèces, on peut comparer leur valeur moyenne entre les sites où l'espèce est présente et ceux où elle est absente :
 
-
-```{r, fig.width = 10, fig.length = 10}
+```{r, fig.width = 12, fig.height = 12}
 plots <- captures_et_env %>%
- # mutate(presence = ifelse(presence, "Présence", "Absence")) %>% 
   gg_density_env_esp(espece = "BRE")
 
 ggpubr::ggarrange(plotlist = plots,
-                  ncol = 3,
+                  ncol = 3, nrow = 3,
                   common.legend = TRUE)
 ```
 
 
 
 
-```{r, fig.width = 10, fig.height = 10}
+```{r, fig.width = 12, fig.height = 12}
 
 
 gg_evol_env_esp <- function(df, parametre, coul_pres = "blue", coul_abs = "red")
