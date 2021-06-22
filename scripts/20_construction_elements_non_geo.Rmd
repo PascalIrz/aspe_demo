@@ -220,7 +220,8 @@ Sous-échantillonnage (la fonction `mef_ssech_abs()` est une adaptation de [cett
 ```{r}
 captures_et_env <- captures_et_env %>% 
   mef_ssech_abs() %>% 
-  select(-dens_ind_1000m2) # histoire d'alléger un peu
+  select(-dens_ind_1000m2) %>% # histoire d'alléger un peu
+  mutate(esp_code_alternatif = fct_relevel(esp_code_alternatif, sort)) # espèces en ordre alphabétique
 ```
 
 Vérification :

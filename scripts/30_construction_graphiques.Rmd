@@ -51,6 +51,8 @@ mon_theme <-
   )
 ```
 
+# Chronique sur un point
+
 ```{r}
 mon_pop <- "10603"
 capt_mef_colo_ext <- mef_colo_ext_pops(df = df1,
@@ -63,6 +65,9 @@ capt_mef_colo_ext <- mef_colo_ext_pops(df = df1,
 gg_colo_ext_pops(capt_mef_colo_ext)
 ```
 
+# Facteurs environnementaux
+
+## En moyenne
 
 ```{r}
 esp_communes <- captures_et_env %>%
@@ -82,7 +87,7 @@ Pour visualiser l'influence des facteurs environnementaux sur la distribution de
 
 ```{r, fig.width = 12, fig.height = 12}
 plots <- captures_et_env %>%
-  gg_density_env_esp(espece = "BRE")
+  gg_density_env_esp(espece = "HOT")
 
 ggpubr::ggarrange(plotlist = plots,
                   ncol = 3, nrow = 3,
@@ -93,21 +98,19 @@ ggpubr::ggarrange(plotlist = plots,
 
 
 ```{r, fig.width = 12, fig.height = 12}
-
-
 gg_evol_env_esp <- function(df, parametre, coul_pres = "blue", coul_abs = "red")
   
 {
   
 df %>% 
   filter(parametre == parametre) %>% 
-  mutate(presence = ifelse(presence, "Présence", "Absence")) %>% 
+  mutate(presence = ifelse(presence, "Pr\u00e9sence", "Absence")) %>% 
   ggplot(aes(x = annee, y = valeur_parametre, col = presence)) +
     geom_smooth(method = "lm") +
-    labs(x = "", y = parametre) +
+    labs(x = "", y = parametre, col = "") +
     scale_x_continuous(limits = c(1995, NA)) +
     scale_y_continuous(limits = c(0, NA)) +
-    scale_fill_manual(values = c(coul_pres, coul_abs)) +
+    scale_fill_manual(values = c(coul_abs, coul_pres)) +
     facet_wrap(~esp_code_alternatif,
                scales = "free_y", ncol = 5)
   
@@ -118,9 +121,19 @@ parametres <- captures_et_env %>%
   unique %>% 
   as.character
 
-map(.x = parametres[1],
-    .f = gg_evol_env_esp,
-    df = captures_et_env)
+captures_et_env2 %>% 
+  gg_evol_env_esp(parametre = parametres[1])
+
+prov <- captures_et_env2 %>%
+  select(esp_code_alternatif, annee, presence, parametre, valeur_parametre) %>% 
+  distinct() %>% 
+  group_by(esp_code_alternatif, annee, presence, parametre) %>% 
+    summarise(moyenne = mean(valeur_parametre, na.rm = T)) %>% 
+  pivot_wider(names_from = presence, values_from = moyenne)
+
+# map(.x = parametres[1],
+#     .f = gg_evol_env_esp,
+#     df = captures_et_env)
 
 ```
 
@@ -153,13 +166,7 @@ env %>%
 
 
 ```{r}
-env %>% 
- # filter(parametre == mon_parametre) %>% 
-  ggplot(aes(x = valeur_parametre, y = as.factor(annee))) +
-    ggridges::geom_density_ridges() +
- #   labs(x = parametre) +
-    facet_wrap(~parametre,
-               scales = "free_x")
+
 ```
 
 
