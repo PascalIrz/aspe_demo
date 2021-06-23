@@ -135,7 +135,7 @@ captures_et_env2 <- captures_et_env %>%
 ```
 
 
-
+Voir si sous-échantillonnage est ok
 
 
 # Sauvegarde des dataframes
