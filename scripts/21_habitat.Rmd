@@ -125,25 +125,65 @@ captures_et_env2 <- captures_et_env %>%
 Vérification :
 
 ```{r}
-moy1 <- captures_et_env %>% 
+med1 <- captures_et_env %>% 
   group_by(esp_code_alternatif, parametre, presence) %>% 
-    summarise(moyenne1 = mean(valeur_parametre, na.rm = T),
+    summarise(mediane1 = median(valeur_parametre, na.rm = T),
               n1 = n()) %>% 
   ungroup()
 
-moy2 <- captures_et_env2 %>% 
+med2 <- captures_et_env2 %>% 
   group_by(esp_code_alternatif, parametre, presence) %>% 
-    summarise(moyenne2 = mean(valeur_parametre, na.rm = T),
+    summarise(mediane2 = median(valeur_parametre, na.rm = T),
               n2 = n()) %>% 
   ungroup()
 
-moy <- moy1 %>% 
-  left_join(moy2) %>% 
-  mutate(delta_abs = moyenne1 - moyenne2,
-         delta_rel = (moyenne1 - moyenne2) / moyenne1)
+med <- med1 %>% 
+  left_join(med2) %>% 
+  mutate(delta_abs = mediane1 - mediane2,
+         delta_rel = (mediane1 - mediane2) / mediane1)
 ```
 
+```{r}
+ggplot(data = med, aes(x = mediane1, y = mediane2, col = parametre)) +
+  geom_point(size = 0.1) +
+  scale_x_log10() +
+  scale_y_log10()
 
+```
+En filtrant les espèces sur mini 30 occurrences (sur une année sur un paramètre) :
+
+```{r}
+ggplot(data = med %>% 
+         filter(n2 > 30) %>% 
+         droplevels(),
+       aes(x = mediane1, y = mediane2, col = esp_code_alternatif)) +
+  geom_point(size = 0.1) +
+  scale_x_log10() +
+  scale_y_log10()
+```
+
+En filtrant les espèces sur mini 300 occurrences :
+
+
+```{r}
+ggplot(data = med %>% 
+         filter(n2 > 300) %>% 
+         droplevels(),
+       aes(x = mediane1, y = mediane2, col = esp_code_alternatif)) +
+  geom_point(size = 0.1) +
+  scale_x_log10() +
+  scale_y_log10()
+```
+
+Les gros écarts sont dûs aux espèces rares.
+
+```{r}
+ggplot(data = moy, aes(x = n2, y = delta_rel, col = parametre))  +
+  geom_point()
+
+```
+
+On voit que pb avec les variables qui comportent des valeurs extrêmes comme la surface du bv $\Rightarrow$ écarter les valeurs au-delà d'un certain quantile ? 
 
 ```{r}
 captures_et_env2  %>% 
