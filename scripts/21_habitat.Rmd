@@ -30,6 +30,26 @@ load(file = "raw_data/toutes_tables_aspe_sauf_mei.RData")
 load(file = "processed_data/df1.RData")
 ```
 
+# Habitat : données opération
+
+Les données d'habitat sont extraites de la table `operation_ipr` de la base donc ne sont disponibles que quand l'IPR a été calculé. Leurs valeurs moyennes sont les suivantes.
+
+>Pour la suite, à voir la meilleure source pour ces variables qui peuvent être renesignées par exemple dans la table `point_prelevement`.
+
+```{r}
+operation_ipr %>% 
+  summarise_at(vars(starts_with("opi_param")),
+               function(x) mean(x, na.rm = T)) %>% 
+
+  t() %>% 
+  as.data.frame() %>% 
+  rename(Moyenne = V1) %>% 
+  mutate(Moyenne = signif(Moyenne, 2)) %>% 
+  DT::datatable()
+```
+
+
+
 # Habitat : moyenne par taxon
 
 
@@ -83,6 +103,7 @@ On peut considérer que cette partie de l'analyse n'a de sens que pour les espè
 especes_param_communs <- pres_abs_env %>% 
   group_by(esp_code_alternatif, parametre) %>% 
     summarise(presences = sum(presences, na.rm = TRUE)) %>% 
+  ungroup() %>% 
   filter(presences > 30) %>%
   select(esp_code_alternatif,
          parametre)
@@ -95,7 +116,7 @@ captures_et_env <- captures_et_env %>%
 Sous-échantillonnage (la fonction `mef_ssech_abs()` est une adaptation de [cette page](https://jennybc.github.io/purrr-tutorial/ls12_different-sized-samples.html)).
 
 ```{r}
-captures_et_env <- captures_et_env %>% 
+captures_et_env2 <- captures_et_env %>% 
   mef_ssech_esp_env() %>% 
   select(-dens_ind_1000m2) %>% # histoire d'alléger un peu
   mutate(esp_code_alternatif = fct_relevel(esp_code_alternatif, sort)) # espèces en ordre alphabétique
@@ -104,7 +125,28 @@ captures_et_env <- captures_et_env %>%
 Vérification :
 
 ```{r}
-captures_et_env  %>% 
+moy1 <- captures_et_env %>% 
+  group_by(esp_code_alternatif, parametre, presence) %>% 
+    summarise(moyenne1 = mean(valeur_parametre, na.rm = T),
+              n1 = n()) %>% 
+  ungroup()
+
+moy2 <- captures_et_env2 %>% 
+  group_by(esp_code_alternatif, parametre, presence) %>% 
+    summarise(moyenne2 = mean(valeur_parametre, na.rm = T),
+              n2 = n()) %>% 
+  ungroup()
+
+moy <- moy1 %>% 
+  left_join(moy2) %>% 
+  mutate(delta_abs = moyenne1 - moyenne2,
+         delta_rel = (moyenne1 - moyenne2) / moyenne1)
+```
+
+
+
+```{r}
+captures_et_env2  %>% 
   mef_compter_pres_abs_env() %>% 
   DT::datatable()
 ```
@@ -130,18 +172,35 @@ especes_selectionnees <- captures_et_env %>%
   pull(esp_code_alternatif) %>% 
   as.character()
 
-captures_et_env2 <- captures_et_env %>% 
+captures_et_env3 <- captures_et_env2 %>% 
   filter(esp_code_alternatif %in% especes_selectionnees)
 ```
 
 
 Voir si sous-échantillonnage est ok
 
+```{r}
+moy3 <- captures_et_env3 %>% 
+  group_by(esp_code_alternatif, parametre, presence) %>% 
+    summarise(moyenne3 = mean(valeur_parametre, na.rm = T),
+              n3 = n()) %>% 
+  ungroup()
+
+moy <- moy %>% 
+  left_join(moy3) %>% 
+  select(esp_code_alternatif,
+         parametre,
+         presence,
+         starts_with("moy"),
+         starts_with("n"))
+```
+
+
 
 # Sauvegarde des dataframes
 
 ```{r, echo = FALSE}
-save(captures_et_env, captures_et_env2, file = "../processed_data/captures_et_env.RData")
+save(captures_et_env, captures_et_env3, file = "../processed_data/captures_et_env.RData")
 ```
 
 ```{r, eval = FALSE}
