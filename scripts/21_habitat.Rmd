@@ -178,7 +178,7 @@ ggplot(data = med %>%
 Les gros écarts sont dûs aux espèces rares.
 
 ```{r}
-ggplot(data = moy, aes(x = n2, y = delta_rel, col = parametre))  +
+ggplot(data = med, aes(x = n2, y = delta_rel, col = parametre))  +
   geom_point()
 
 ```
@@ -219,28 +219,39 @@ captures_et_env3 <- captures_et_env2 %>%
 
 Voir si sous-échantillonnage est ok
 
+
 ```{r}
-moy3 <- captures_et_env3 %>% 
-  group_by(esp_code_alternatif, parametre, presence) %>% 
-    summarise(moyenne3 = mean(valeur_parametre, na.rm = T),
-              n3 = n()) %>% 
-  ungroup()
+gg_env_fn_annee <- function(df, parametre, annee_debut = 1995, annee_fin = NA) {
+  
+  if(is.na(annee_fin))
+  {
+    annee_fin <- df %>%
+      pull(annee) %>% 
+      max(na.rm = TRUE)
+  }
+  
+  df %>% 
+  filter(parametre == !!parametre,
+         annee >= annee_debut,
+         annee <= annee_fin) %>% 
+  ggplot(aes(x = annee, y = valeur_parametre,
+             col = presence)) +
+  geom_smooth(method = "lm", se = TRUE) +
+  facet_wrap(~esp_code_alternatif)
+}
 
-moy <- moy %>% 
-  left_join(moy3) %>% 
-  select(esp_code_alternatif,
-         parametre,
-         presence,
-         starts_with("moy"),
-         starts_with("n"))
+captures_et_env %>% 
+  gg_env_fn_annee (parametre = "altitude")
 ```
-
 
 
 # Sauvegarde des dataframes
 
 ```{r, echo = FALSE}
-save(captures_et_env, captures_et_env3, file = "../processed_data/captures_et_env.RData")
+save(captures_et_env,
+     captures_et_env2,
+     captures_et_env3,
+     file = "../processed_data/captures_et_env.RData")
 ```
 
 ```{r, eval = FALSE}
