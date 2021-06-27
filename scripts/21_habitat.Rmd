@@ -217,31 +217,9 @@ captures_et_env3 <- captures_et_env2 %>%
 ```
 
 
-Voir si sous-échantillonnage est ok
-
-
-```{r}
-gg_env_fn_annee <- function(df, parametre, annee_debut = 1995, annee_fin = NA) {
-  
-  if(is.na(annee_fin))
-  {
-    annee_fin <- df %>%
-      pull(annee) %>% 
-      max(na.rm = TRUE)
-  }
-  
-  df %>% 
-  filter(parametre == !!parametre,
-         annee >= annee_debut,
-         annee <= annee_fin) %>% 
-  ggplot(aes(x = annee, y = valeur_parametre,
-             col = presence)) +
-  geom_smooth(method = "lm", se = TRUE) +
-  facet_wrap(~esp_code_alternatif)
-}
-
+```{r, fig.height = 11, fig.width = 11}
 captures_et_env %>% 
-  gg_env_fn_annee (parametre = "altitude")
+  aspe::gg_env_fn_annee()
 ```
 
 
