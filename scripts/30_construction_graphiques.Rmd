@@ -87,7 +87,7 @@ Pour visualiser l'influence des facteurs environnementaux sur la distribution de
 
 ```{r, fig.width = 12, fig.height = 12}
 plots <- captures_et_env %>%
-  gg_density_env_esp(espece = "HOT")
+  gg_density_env_esp(espece = "BRE")
 
 ggpubr::ggarrange(plotlist = plots,
                   ncol = 3, nrow = 3,
