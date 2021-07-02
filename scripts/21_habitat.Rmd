@@ -218,7 +218,7 @@ captures_et_env3 <- captures_et_env2 %>%
 
 
 ```{r, fig.height = 11, fig.width = 11}
-captures_et_env %>% 
+captures_et_env3 %>% 
   aspe::gg_env_fn_annee()
 ```
 
