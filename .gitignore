@@ -3,9 +3,10 @@
 *.RData
 *.Ruserdata
 *.Rproj
-/scripts/*.html
-/raw_data
-/processed_data
-/assets
-/reunions
+*.rds
+scripts/*.html
+/raw_data/
+/processed_data/
+/assets/
+/reunions/
 .Rproj.user

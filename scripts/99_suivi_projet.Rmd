@@ -1,0 +1,33 @@
+---
+title: "Publication reproductible : Dataviz poissons"
+author: "OFB - DR Bretagne"
+date: "`r format(Sys.time(), 'Le %d %B %Y')`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      warning = FALSE,
+                      message = FALSE)
+```
+
+```{r}
+library(tidyverse)
+library(ganttrify)
+```
+
+
+```{r}
+project <- readxl::read_xlsx("../raw_data/donnees_gantt.xlsx", sheet = "project")
+spots <- readxl::read_xlsx("../raw_data/donnees_gantt.xlsx", sheet = "spots")
+```
+
+
+```{r, fig.width = 10}
+ganttrify(project = project,
+          spots = spots,
+          project_start_date = "2021-05",
+          font_family = "Roboto Condensed") +
+  labs(caption = "A : Présentation DR-DN\nB : Visio de projet")
+```
+

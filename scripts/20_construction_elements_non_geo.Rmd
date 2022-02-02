@@ -4,11 +4,12 @@ author: "Pascal Irz"
 date: "`r format(Sys.time(), 'Le %d %B %Y')`"
 output:
   html_document:
+    code_folding: show
     toc: true
     toc_float: true
 ---
   
-```{r setup, include=FALSE}
+```{r setup, include = FALSE}
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
 ```
 

@@ -1,0 +1,375 @@
+---
+title: "Démonstrateur ASPE : préparation des données"
+author: "Pascal Irz"
+date: "`r format(Sys.time(), 'Le %d %B %Y')`"
+output:
+  html_document:
+    code_folding: show
+    toc: true
+    toc_float: true
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+# Principe
+
+Le démonstrateur est une application *shiny* permettant de visualiser un tableau de bord d'indicateurs en fonction de la sélection par l'utilisateur d'un point de pêche ou d'une aire géographique.
+
+L'information contenue dans la base Aspe étant tabulée, il faut la spatialiser pour permettre la sélection géographique. Pour une rapidité d'affichage satisfaisante, les opérations les plus lourdes de traitement (ex : intersections géographiques) sont au maximum réalisées lors de prétraitements, donc en dehors de l'appli. Les données sont autant que possible agrégées pour diminuer la taille des tables.
+
+Ces opérations de prétraitement ne sont pas spécifiques au développement du démonstrateur. Au contraire elles sont assez génériques pour qui souhaite exploiter la base Aspe pour calculer sur un périmètre donné, une période donnée, etc. des indicateurs comme les abondances, densités, IPR et autres. Elles ont donc fait l'objet du développement, à part, d'un package R nommé [{aspe}](https://github.com/PascalIrz/aspe). Certaines des données géographiques sont téléchargées et mises en forme au moyen du package [{tod}](https://github.com/PascalIrz/tod).
+
+
+# Préparation des données tabulées
+
+## Chargement des packages
+
+```{r}
+library(aspe)
+library(tidyverse)
+```
+
+## Chargement des tables
+
+Les données ont été parsées depuis un dump de la base Aspe (cf. [ce tuto](https://rpubs.com/kamoke/713407)).
+
+```{r, eval = FALSE}
+library(aspe)
+library(tidyverse)
+library(tod)
+
+load(file = "raw_data/tables_sauf_mei_2021_10_21_11_44_01.RData")
+```
+
+```{r, echo = FALSE, warning = FALSE, message = FALSE}
+library(aspe)
+library(tidyverse)
+
+rdata_tables <- misc_nom_dernier_fichier(repertoire = "../../../raw_data",
+                                         pattern = "^tables")
+
+load(rdata_tables)
+```
+
+La dernière date de saisie / modification / opération dans la base est le `r format(misc_derniere_date(), '%d %B %Y')`.
+
+## Assemblage et filtrage des données
+
+Le principe pour utiliser les tables de la base SQL d'origine est de constituer un `dataframe` "passerelle" qui relie les tables d'origine par les identifiants de leurs objets (stations, points, opérations, lots, etc.). On peut ensuite compléter cette ossature par des jointures sur les champs contenant les identifiants. La démarche se retrouve systématiquement dans les traitements donc elle n'a été détaillée qu'une fois dans [ce tuto](https://rpubs.com/kamoke/713491).
+
+On rajoute :
+
+- les dates de prospection et une variable `annee`, avec la fonction `mef_ajouter_ope_date()` pour permettre des agrégations annuelles
+- les données de captures au niveau des lots (sans les mesures individuelles) avec `mef_ajouter_lots()`
+- etc.
+
+```{r}
+data <- mef_creer_passerelle() %>% # création passerelle
+  mef_ajouter_ope_date() %>%  # ajout date et année
+  mef_ajouter_lots() %>%  # ajout des lots (effectif par espèce)
+  mef_ajouter_surf_calc() %>%  # ajout des surfaces prospectées pour calculer les densités
+  mef_ajouter_libelle() # ajout libellé du point de prélèvement
+```
+
+Ici on souhaite ne conserver que les pêches réalisées dans le cadre des réseaux, on utilise la fonction `mef_ajouter_objectif()` puis on filtre sur les modalités à conserver : 
+
+```{r}
+data <- data %>% 
+  mef_ajouter_objectif() %>%
+  filter(obj_libelle %in% c("RCS – Réseau de Contrôle de Surveillance",
+                            "RHP – Réseau Hydrobiologique Piscicole",
+                            "RNB – Réseau National de Bassin",
+                            "RRP – Réseau de Référence Pérenne",
+                            "RCO – Réseau Contrôle opérationnel"))
+```
+
+On pourrait aussi restreindre le jeu de données par exemple aux pêches complètes et réalisées sans bateau avec les fonctions `mef_ajouter_type_protocole()` et `mef_ajouter_moyen_prospection()` (code non exécuté ici).
+
+## Agrégation pour simplifier le tableau
+
+```{r}
+captures <- data %>%
+  group_by(
+    sta_id,
+    pop_id,
+    ope_id,
+    ope_date,
+    annee,
+    esp_code_alternatif,
+    ope_surface_calculee,
+    pop_libelle
+  ) %>%
+  summarise(effectif = sum(lop_effectif, na.rm = TRUE)) %>%
+  ungroup() %>%
+  droplevels()
+```
+
+
+A ce stade on peut observer quelques lignes du tableau, tirées au hasard :
+
+```{r, class.source = 'fold-hide'}
+captures %>% 
+  sample_n(10) %>% 
+  knitr::kable(align = "c")
+```
+
+## Sélection des opérations
+
+Il existe des cas où un même point a été prospecté à plusieurs reprises la même année :
+
+```{r, class.source = 'fold-hide'}
+captures %>% 
+  group_by(pop_id,
+           pop_libelle,
+           annee) %>% 
+    summarise(n_ope = n_distinct(ope_id)) %>% 
+  ungroup() %>%
+  filter(n_ope > 1) %>% 
+  arrange(-n_ope) %>% 
+  DT::datatable()
+```
+
+Dans ces cas, pour éviter les biais d'échantillonnage dans les tendances, on filtre le tableau de données pour ne retenir qu'une des opération. Retenons par exemple la dernière de l'année (pêche d'automne). Comme il y a même  quelques cas où plusieurs opérations sont enregistrées le même jour, on n'en retient qu'une.
+
+```{r}
+ope_sel <- captures %>% 
+  select(pop_id,
+         ope_date,
+         annee,
+         ope_id) %>% 
+  group_by(pop_id,
+           annee) %>%
+    filter(ope_date == max(ope_date)) %>% # dernière des dates de l'année
+    slice(1) %>% # une des opérations si plusieurs à cette date 
+  pull(ope_id)
+
+captures <- captures %>% 
+  filter(ope_id %in% ope_sel)
+```
+
+
+# Préparation des données spatiales
+
+Il s'agit ici d'opérer les étapes qui permettront un affichage spatialisé des données élémentaires (les points de prélèvement) ou agrégées sur un territoire qui peut être administratif (par exemple un département) ou hydrographique (un bassin hydro), voire un peu des deux (un SAGE). Les étapes seront :
+
+- Téléchargement des découpages territoriaux fins
+- Agrégation aux échelles supérieures
+- Spatialisation des points de prélèvement
+- Attribution à chaque point de son département, sa région, son secteur hydrographique
+- Simplification des découpages géographiques pour un affichage plus rapide
+
+## Chargement des découpages géographiques 
+
+### Bassins hydrographiques
+
+Le découpage des bassins au sens de la DCE est téléchargeable depuis [data.gouv.fr](https://www.data.gouv.fr/fr/datasets/bassins-dce/), au format GeoJSON ou [shapefile](https://www.data.gouv.fr/fr/datasets/r/7c3a45a7-518a-4415-80aa-c59e427592c5).
+
+Un découpage plus fin est disponible sur la page [Zones hydrographiques - Métropole 2016 - BD Carthage](https://geo.data.gouv.fr/fr/datasets/f467f445570db14819bdb0058d4038f44f54b77f) du portail [geo.data.gouv.fr](https://geo.data.gouv.fr) et télécharger le shapefile à [cette URL](Zones hydrographiques - Métropole 2016 - BD Carthage). La fonction `sie_carthage_bassins_tod()` du package `{tod}` permettent d'enchaîner le téléchargement, la décompression et la lecture de la couche shapefile proposée. Par défaut l'archive zip et les fichiers décompressés sont stockés dans un sous-répertoire `"raw_data"` qui est créé s'il ne pré-existe pas.
+
+Comme notre étude est restreinte à la France continentale, l'ensemble des objets géographiques seront en Lambert 93 (EPSG:2154). Si l'on avait besoin de couvrir les outre-mers, on aurait choisi le WGS84 (EPSGG:4326).
+
+```{r, eval = FALSE}
+bv <- tod::sie_carthage_bassins_tod(repertoire = "raw_data")
+```
+
+```{r, echo = FALSE}
+load(file = "../raw_data/bv.RData")
+load(file = "../raw_data/geo_poly_data.RData")
+```
+
+Les districts hydrographiques n'étant pas renseignés dans notre couche géographique, on a recours à de la donnée externe (un peu bidouillée - à voir comment obtenir plus sûr) pour agréger au niveau supérieur.
+
+```{r, eval = FALSE}
+districts <- readxl::read_xlsx("raw_data/corresp_rh_dh.xlsx")
+```
+
+```{r, echo = FALSE}
+districts <- readxl::read_xlsx("../raw_data/corresp_rh_dh.xlsx")
+```
+
+```{r}
+bv <- bv %>% 
+  left_join(y = districts)
+```
+
+On peut alors créer les objets de classe `sf` qui permettront d'attribuer à chaque point son appartenance au découpage hydrographique à différentes échelles. Pour les besoins du présent projet, il faut que les sélections géographiques comprennent plusieurs stations d'échantillonnage, ce qui contraint la finesse du découpage. Ici, nous retenons les échelles des *districts hydro* subdivisés en * "*régions hydro* puis en *secteurs hydrographiques*. La fonction `sie_carthage_bassins_agr()` du package `{tod}` permet de regroupes les "zones hydro" en "secteurs hydro", etc. . L'argument `prop_pts_a_garder = 1` signifie que 100% des points sont conservés.
+
+```{r, eval = FALSE}
+sh_geo <- bv %>% 
+  tod::sie_carthage_bassins_agr(echelle = "Secteur_Hydro")
+
+rh_geo <- bv %>% 
+  tod::sie_carthage_bassins_agr(echelle = "Region_Hydro")
+
+dh_geo <- bv %>% 
+  tod::sie_carthage_bassins_agr(echelle = "District_Hydro")
+```
+
+Visualisation.
+
+```{r}
+sh_geo %>%
+  ggplot() +
+    geom_sf()
+```
+
+
+### Entités administratives
+
+```{r}
+url <- "https://www.data.gouv.fr/fr/datasets/r/3096e551-c68d-40ce-8972-a228c94c0ad1"
+depts <- tod::osm_depts_tod(url = url,
+                            repertoire = "../raw_data",
+                            crs_sortie = 2154)
+```
+
+Visualisation
+
+```{r}
+depts %>%
+  filter(str_length(code_insee) == 2) %>% # métropole
+  ggplot() +
+    geom_sf()
+```
+Les régions
+
+```{r}
+url <- "https://www.data.gouv.fr/fr/datasets/r/aacf9338-8944-4513-a7b9-4cd7c2db2fa9"
+regions <- tod::osm_depts_tod(url = url,
+                            repertoire = "../raw_data",
+                            crs_sortie = 2154)
+
+```
+
+
+## Spatialisation des points
+
+### Principe
+
+Dans Aspe, l'entité spatiale de base, toujours identifiée, est le point de pêche. Tous sont géoréférencés, mais pas tous dans le même CRS. On va donc collecter les codes EPSG associés aux coordonnées de chacun des points, puis les reprojeter en Lambert 93.
+
+### Référentiels
+
+Dans la table `ref_type_projection`, il apparaît que pour le Lambert II étendu, le code EPSG (27572) est manquant. Il faut donc la compléter (la version à venir de la base devrait voir cette ommission corrigée).
+
+```{r}
+ref_type_projection <- ref_type_projection %>%
+  geo_completer_ref_type_projection()
+```
+
+
+### Géoréférencement
+
+```{r}
+pop <- point_prelevement %>%
+  rename(sta_id = pop_sta_id) %>% # nécessaire pour la jointure de mef_ajouter_libelle
+  mef_ajouter_libelle() %>%
+  left_join(y = station %>%
+              select(sta_id, sta_code_sandre)) %>%
+  geo_ajouter_crs(var_id_crs = "pop_typ_id") %>%
+  select(
+    pop_id,
+    pop_libelle,
+    pop_coordonnees_x,
+    pop_coordonnees_y,
+    typ_code_epsg,
+    sta_code_sandre
+  )
+```
+
+Conversion des coordonnées.
+
+```{r}
+coords <- geo_convertir_coords_df(df = pop,
+                                  var_x = "pop_coordonnees_x",
+                                  var_y = "pop_coordonnees_y",
+                                  var_crs_initial = "typ_code_epsg",
+                                  crs_sortie = 2154) %>%
+  rename(x_l93 = X, y_l93 = Y)
+```
+
+### Sélection du périmètre
+
+Sélection d'une fenêtre de coordonnées couvrant la France continentale et transformation du `dataframe` des points en objet géographique de classe `sf`. 
+
+```{r}
+pop_geo <- pop %>%
+  left_join(coords) %>%
+  filter(x_l93 > 100000,
+         x_l93 < 1100000,
+         y_l93 > 6100000,
+         y_l93 < 7200000) %>% 
+  sf::st_as_sf(coords = c("x_l93", "y_l93"), crs = 2154)
+```
+
+Visualisation d'un échantillon des points.
+
+```{r}
+mapview::mapview(sample_n(pop_geo, 100), col.regions = "red") +
+  mapview::mapview(rh_geo)
+```
+
+# Assignation des points
+
+On complète le *dataframe* `pop_geo` en attribuant à chacun des points son appartenance à un secteur / région / district hydrographique, à un département et à une région. 
+
+```{r}
+pop_geo <- pop_geo %>% 
+  geo_attribuer(poly_sf = depts_geo) %>% 
+  geo_attribuer(poly_sf = regs_geo) %>% 
+  geo_attribuer(poly_sf = sh_geo) %>% 
+  geo_attribuer(poly_sf = rh_geo) %>% 
+  geo_attribuer(poly_sf = dh_geo) %>% 
+  select(pop_id,
+         pop_libelle,
+         sta_code_sandre,
+         dept_num = INSEE_DEP, dept_lib = NOM_DEP,
+         reg_num = INSEE_REG.y, reg_lib = NOM_REG,
+         CdSecteurHy = CdSecteurH, LbSecteurHy = LbSecteurH,
+         CdRegionHy, LbRegionHy,
+         CdDistrictHy, LbDistrictHy)
+```
+
+
+
+
+
+
+
+
+
+
+# Simplification des découpages géographiques
+
+Pour les besoins ci-dessus d'attribution à chaque point de prélèvement d'une *région hydro*, d'un département, etc. il était nécessaire d'employer des couches d'information géographique précises en particulier parce que les limites de départements sony souvent des cours d'eau. En revanche pour la visualisation on va simplifier les polygones pour les alléger et gagner en rapidité d'affichage. Ici on supprime 99% des points tout en conservant la topologie (gestion des limites communes entre polygones pour éviter de créer des interstices ou des chevauchements).
+
+```{r}
+depts_geo <- rmapshaper::ms_simplify(depts_geo, keep = 0.01)
+regs_geo <- rmapshaper::ms_simplify(regs_geo, keep = 0.01)
+sh_geo <- rmapshaper::ms_simplify(sh_geo, keep = 0.01)
+rh_geo <- rmapshaper::ms_simplify(rh_geo, keep = 0.01)
+dh_geo <- rmapshaper::ms_simplify(dh_geo, keep = 0.01)
+```
+
+Visualisation avec le package `ggplot2`.
+
+```{r}
+ggplot(sh_geo) + geom_sf()
+```
+
+# Sauvegarde des données préparées
+
+```{r, echo = FALSE}
+save(captures, ope_sel, file = "../processed_data/captures.RData")
+save(pop_geo, file = "../processed_data/pop_geo.RData")
+save(depts_geo, regs_geo, sh_geo, rh_geo, dh_geo, file = "../processed_data/poly_geo_simp.RData")
+```
+
+```{r, eval = FALSE}
+save(captures, ope_sel, file = "processed_data/captures.RData")
+save(pop_geo, file = "processed_data/pop_geo.RData")
+save(depts_geo, regs_geo, sh_geo, rh_geo, dh_geo, file = "processed_data/poly_geo_simp.RData")
+```
+
