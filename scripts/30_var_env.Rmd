@@ -1,0 +1,117 @@
+---
+title: "Démonstrateur ASPE : paramètres environnementaux"
+author: "Pascal Irz"
+date: "`r format(Sys.time(), 'Le %d %B %Y')`"
+output:
+  html_document:
+    code_folding: show
+    toc: true
+    toc_float: true
+---
+  
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+# Chargement des packages et des données
+
+```{r}
+library(aspe)
+library(tidyverse)
+```
+
+
+```{r}
+# chargement données déjà prétraitées
+load(file = "../processed_data/df1.RData")
+
+# chargement autres tables
+rdata_tables <- misc_nom_dernier_fichier(repertoire = "../../../raw_data",
+                                         pattern = "^tables")
+
+load(rdata_tables)
+```
+
+
+# Paramètres environnementaux
+
+Les paramètres environnementaux peuvent être utilisés pour caractériser le macro-habitat des espèces. On peut par exemple calculer l'altitude moyenne des sites où une espèce a été détectée et l'interpréter en regard de l'altitude moyenne sites où elle n'a pas été détectée ou de celle des sites prospectés. Pour cet usage il est essentiel de ne conserver que les opérations réalisées dans un but d'inventaire, donc d'écarter les indices d'abondance qui, focalisés sur une des espèces, ne renseignent pas sur les autres.
+
+```{r}
+ref_protocole %>% knitr::kable()
+```
+
+Retenons les protocoles 1 à 4 (les inventaires).
+
+Ces paramètres peuvent être trouvés soit dans la table `operation_ipr` car ils servent au calcul de l'indice, soit dans la table `point_prelevement`. Ici nous choisissons d'associer les paramètres à l'opération. S'ils sont manquants, on les complète à partir des informations de la table `point_prelevement`.
+
+Si l'on veut simplement compléter le tableau des captures avec les données environnementales, on utilise `mef_ajouter_ope_env()` :
+
+```{r,eval = FALSE}
+df1_env <- df1 %>% 
+  mef_ajouter_ope_env()
+```
+
+Si l'on veut comparer les caractéristiques des points de présence et d'absence d'une espèce donnée, on doit ne conserver que les méthodes de prospection de type inventaire (dont l'intitulé comprend le mot "pêche") et faire apparaître les absences dans les échantillons en complétant le tableau :
+
+```{r}
+captures_et_env <- df1 %>%
+  mef_ajouter_type_protocole() %>% 
+  filter(str_detect(pro_libelle, "Pêche")) %>% 
+  mef_ajouter_abs(var_id = ope_id,
+                  var_taxon = esp_code_alternatif,
+                  var_effectif = effectif) %>% 
+  mef_ajouter_ope_env() %>%
+  mef_pivoter_var_env() %>% 
+  mutate(presence = effectif > 0)
+```
+
+Le tableau ainsi produit est volumineux (`r nrow(captures_et_env)` lignes). S'agissant de metttre les caractéristiques des sites de "présence" en regard de celles des sites d'"absence" de chacun des taxons, il n'est pas utile de disposer de plus d'observations d'absence que d'observations de présence. Or pour les espèces rares, le tableau comprend quelques observations de présence et beaucoup d'absence. On peut donc sous-échantillonner ces dernières.
+
+```{r}
+pres_abs_env <- captures_et_env  %>%
+  mef_compter_pres_abs_env()
+
+pres_abs_env %>% DT::datatable()
+```
+
+On peut considérer que cette partie de l'analyse n'a de sens que pour les espèces suffisamment présentes - par exemple à partir de n = 30 - et que l'on peut effectuer un sous-échantillonnage des absences à concurrence du nombre des présences. Il faut aussi tenir compte des données manquantes dans les variables environnementales, donc le chiffre de 30 doit s'entendre "minimum 30 sites où l'espèce est présente et pour lesquels la variable ... est disponible".
+
+
+
+```{r}
+# filtrage des espèces communes
+especes_param_communs <- pres_abs_env %>% 
+  filter(presences > 30) %>%
+  select(esp_code_alternatif,
+         parametre)
+
+captures_et_env <- captures_et_env %>%
+  right_join(y = especes_param_communs) %>% 
+  droplevels()
+```
+
+Sous-échantillonnage (la fonction `mef_ssech_abs()` est une adaptation de [cette page](https://jennybc.github.io/purrr-tutorial/ls12_different-sized-samples.html)).
+
+```{r}
+captures_et_env <- captures_et_env %>% 
+  mef_ssech_abs() %>% 
+  select(-dens_ind_1000m2) %>% # histoire d'alléger un peu
+  mutate(esp_code_alternatif = fct_relevel(esp_code_alternatif, sort)) # espèces en ordre alphabétique
+```
+
+Vérification :
+
+```{r}
+captures_et_env  %>% 
+  mef_compter_pres_abs_env() %>% 
+  DT::datatable()
+```
+
+
+Sauvegarde
+
+```{r}
+save(captures_et_env, file = "../processed_data/captures_et_env.RData")
+```
+

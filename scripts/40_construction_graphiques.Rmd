@@ -25,6 +25,8 @@ load(file = "../processed_data/df1.RData")
 load(file = "../processed_data/df2.RData")
 load(file = "../processed_data/captures_et_env.RData")
 load(file = "../raw_data/toutes_tables_aspe_sauf_mei.RData")
+
+file.exists("../raw_data/toutes_tables_aspe_sauf_mei.RData")
 ```
 
 ```{r, eval = FALSE}
