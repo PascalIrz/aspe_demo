@@ -22,15 +22,26 @@ library(tidyverse)
 
 
 ```{r, echo = FALSE}
+# chargement données déjà prétraitées
 load(file = "../processed_data/captures.RData")
-load(file = "../raw_data/mei.RData")
-load(file = "../raw_data/toutes_tables_aspe_sauf_mei.RData")
+
+# chargement mesures individuelles
+rdata_mei <- misc_nom_dernier_fichier(repertoire = "../../../raw_data",
+                                         pattern = "^mei")
+
+load(rdata_mei)
+
+# chargement autres tables
+rdata_tables <- misc_nom_dernier_fichier(repertoire = "../../../raw_data",
+                                         pattern = "^tables")
+
+load(rdata_tables)
 ```
 
 ```{r, eval = FALSE}
-load(file = "processed_data/captures.RData")
-load(file = "raw_data/mei.RData")
-load(file = "raw_data/toutes_tables_aspe_sauf_mei.RData")
+load(file = "processed_data/captures.RData") # chargement données déjà prétraitées
+load(file = "raw_data/mei.RData") # chargement mesures individuelles
+load(file = "raw_data/toutes_tables_aspe_sauf_mei.RData") # chargement autres tables
 ```
 
 
