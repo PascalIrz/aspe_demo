@@ -1,0 +1,163 @@
+---
+title: "Bilan Données ASPE"
+author: ""
+date: "`r format(Sys.time(), 'Le %d %B %Y')`"
+output:
+  html_document:
+    code_folding: hide
+    toc: true
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+```{r}
+library(aspe)
+library(tidyverse)
+
+# chargement de la dernière version des tables
+rdata_tables <- misc_nom_dernier_fichier(repertoire = "../../../raw_data",
+                                         pattern = "^tables")
+
+load(rdata_tables)
+```
+
+
+# Validation des opérations
+
+Le fort pourcentage de « en cours de saisie » (35%)  ressemble bien à un arriéré hérité de WAMA => peu utilisable à ce stade pour notre usage. En informer Eddy / mise en qualité ?
+
+```{r}
+df <- operation %>% 
+  mutate(annee = lubridate::year(ope_date)) %>% 
+  dplyr::count(ope_eta_id, annee) %>% 
+  dplyr::left_join(
+    ref_etat_avancement, 
+    by = c("ope_eta_id" = "eta_id")
+  ) %>% 
+  dplyr::select(ope_eta_id, annee, eta_libelle, n) %>% 
+  dplyr::mutate(
+    `%` = 100 * n / sum(n)
+  )
+
+ggplot(data = df,
+    aes(x = annee,
+             y = n,
+             col = eta_libelle)) +
+  geom_line() +
+  labs(y = "Nombre d'opérations") +
+  guides(colour = guide_legend(reverse=T))
+```
+
+Cartographie des opérations "en cours de saisie" dont l'OFB est commanditaire.
+
+```{r}
+ope_ecs <- operation %>% 
+  mef_ajouter_validation() %>% 
+  mef_ajouter_intervenants() %>% 
+  filter(commanditaire_ofb) %>% 
+  pull(ope_id)
+
+pops <- point_prelevement %>% 
+  geo_ajouter_crs(pop_typ_id)
+
+coords <- pops %>% 
+  geo_convertir_coords_df(var_x = pop_coordonnees_x,
+                          var_y = pop_coordonnees_y,
+                          var_crs_initial = typ_code_epsg,
+                          var_id = pop_id)
+
+map_data <- mef_creer_passerelle() %>% 
+  select(pop_id, ope_id) %>% 
+  distinct() %>% 
+  filter(ope_id %in% ope_ecs) %>% 
+  left_join(coords) %>% 
+  sf::st_as_sf(coords = c("X", "Y"), crs = 4386)
+
+regions <- COGiter::regions_metro_geo
+
+map_data2 <- map_data %>% 
+  geo_attribuer(regions)
+
+map_data3 <- map_data2 %>% 
+  sf::st_drop_geometry() %>% 
+  group_by(REG) %>% 
+    summarise(n_ope = n_distinct(ope_id)) %>% 
+  ungroup() %>% 
+  filter(!is.na(REG))
+
+regions %>% 
+  left_join(map_data3) %>% 
+  ggplot(aes(fill = n_ope)) +
+    geom_sf() +
+    labs(title = "Nombre d'opérations en cours de saisie") +
+    scale_fill_gradient2()
+```
+
+
+# Types de pêche
+
+Remarque émise par N. Poulet pour le data paper : il serait prérérable de distinguer les pêches complètes à 1 passage de celles à 2 passages et + compte tenu des différences d’usage autorisé. On pourrait garder sous le coude, si on trouve le temps plus tard, la possibilité de mobiliser les pêches « espèces ».
+
+
+# Point ou station ?
+
+En complément du code de Cédric, on peut aussi s'intéresser aux points non rattachés à des stations qui ne sont pas négligeables :
+
+
+```{r}
+Chroniques <- operation %>% 
+    dplyr::left_join(point_prelevement, by = c("ope_pop_id" = "pop_id")) %>% 
+    dplyr::select(ope_id, ope_pop_id, ope_pro_id, ope_date, ope_eta_id, ope_niq_id, pop_sta_id) %>% 
+    dplyr::mutate(annee = lubridate::year(ope_date)) %>% 
+    # dplyr::mutate(pop_sta_id = ifelse(is.na(pop_sta_id), paste0("op", ope_pop_id), pop_sta_id)) %>% 
+    dplyr::group_by(ope_pop_id) %>% 
+    dplyr::mutate(pop_chronique = dplyr::n_distinct(annee)) %>% 
+    dplyr::group_by(pop_sta_id) %>% 
+    dplyr::mutate(sta_chronique = dplyr::n_distinct(annee)) %>% 
+    dplyr::ungroup() %>% 
+    dplyr::distinct(pop_sta_id, ope_pop_id, sta_chronique, pop_chronique) %>% 
+    dplyr::mutate(delta_chronique = sta_chronique - pop_chronique)
+
+Chroniques %>% 
+  #  dplyr::filter(!is.na(pop_sta_id)) %>% 
+    dplyr::mutate(
+        Chronique = dplyr::case_when(
+          is.na(pop_sta_id) ~ "pas de rattachement station",
+          delta_chronique == 0 ~ "mêmes chroniques",
+          sta_chronique < pop_chronique ~ "chronique station plus courte",
+          sta_chronique > pop_chronique ~ "chronique station plus longue"
+            
+        )
+    ) %>%
+    dplyr::group_by(Chronique) %>% 
+    dplyr::summarise(
+        stations = dplyr::n_distinct(pop_sta_id),
+        points = dplyr::n_distinct(ope_pop_id),
+        .groups = "drop"
+        ) %>% 
+  DT::datatable()
+```
+
+Pour voir plus concrètement les points concernés :
+
+```{r}
+chroniques_ss_sta <- mef_creer_passerelle() %>% 
+  select(sta_id,
+         pop_id,
+         ope_id) %>% 
+  distinct() %>% 
+  filter(is.na(sta_id)) %>% # points non rattachés à station
+  mef_ajouter_libelle() %>% 
+  mef_ajouter_ope_date() %>% 
+  group_by(pop_id, pop_libelle) %>% 
+    summarise(pop_ss_sta_chronique = n_distinct(annee),
+              .groups = "drop") %>%
+  arrange(-pop_ss_sta_chronique)
+
+DT::datatable(chroniques_ss_sta)
+```
+
+On a donc `r nrow(chroniques_ss_sta)` points avec des pêches sans qu'ils soient rattachés à une station, ce qui représente `r sum(chroniques_ss_sta$pop_ss_sta_chronique, na.rm = T)` opérations et des séries jusqu'à `r max(chroniques_ss_sta$pop_ss_sta_chronique)` années. La plupart des points n'ont qu'une pêche mais environ 150 d'entre eux ont des chroniques de 5 ans ou plus.

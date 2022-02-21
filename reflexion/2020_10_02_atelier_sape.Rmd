@@ -1,0 +1,125 @@
+---
+title: "Atelioer technique Aspe"
+author: "Pascal Irz"
+date: "02/10/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+# Objectifs atelier
+
+## Rappel mail invitation Eddy
+
+"Je vous invite à faire un point rapide en amont de l’atelier sur l’outil notamment sur :
+
+- ce que vous en attendez ?
+- les documents techniques, sont-ils utiles ? à compléter ? à diversifier ?
+- quels sont les points de blocage et d’amélioration ?
+- quelles sont les perspectives d’évolution de l’outil ?
+- etc."
+
+## Expression des besoins
+
+- HdF Elisabeth Mertz, Gaëlle : besoins / validations, etc.
+- Paca M Clair & M Gagnant arrivé en 2020. 
+- Normandie Ayala Loisel & Camille Rivière
+- Bretagne P Irz : les bases du fonctionnement ; lien avec autres éléments SEEE, Naiades ; intérêt particulier valorisation
+- CVdL Bénédite besoins mise à jour / évolutions de l'outil, valorisation, ouverture à l'ext  + Michaël besoins / validation et export
+- ARA : Nicolas Roset
+
+# Qu'est-ce que ASPE
+Schéma Nat Données sur l'Eau (SNDE) de 2018 confie à Ofb la gestion de la prod + de la bancarisation
+Application de Saisie des données Piscicoles et Environnementale (ASPE)
+
+ASPË en tant que tel est l'appli web de saisie, appuyée sur une base PostGreSQL (Banque Nationale de Référence).
+
+Aujourd'hui slt données protocolées des cours d'eau, **sur des points référencés SANDRE**.
+
+Aspe destiné à terme à recevoir données non-OFB. Dans un premier temps, limité à Ofb, mais à ouvrir. Act limité / capacité des serveurs et pbs d'exports (systhèses très demandeuses en capacité serveur) + inquiétudes / données non sandrifiées des fédés. Pb / 
+
+Serveur au BRGM, prestataire GFI. Equipe Ofb : Eddy, Chef de projet info V. Viennot, admin données Thierry Point.
+
+Les docs sont déposés sur l'aide Aspe + sur l'Alfresco connaissances.
+
+Intégration des vieilles données ? Données non sandrifiées ?
+
+PI : Pb / stations non sandrifiées dans le cas de l'atlas. Id unique dans aspe au niveau le plus fin : la donnée indiv ou le lot.
+
+## utilisation
+
+Recherche modif points / stations
+Saisie
+Qualification / validation
+Export / exploitation (basique)
+
+En fait IPR+ n'est pas dispo act.
+
+~40000 opérations depuis 1966, 10-15 visites/j.
+
+Qq tts :
+
+- karl é strub
+- densité
+- dégroupage des lots
+- calcul indices via SEEE
+
+13 formats de sortie standard
+
+Pas requêtable en base in depuis une API. Limité à 200 opérations / plante au-delà.
+
+Croisement des données : différen,tes poss :
+
+- Croisement en local pour requêtes "type".
+- Copie de la base (nécessite outil pour attaquer des bases en PostGRE).
+- Dvlpt API : pas dans les priorités.
+- Pas poss ouvrir base elle-même, mais poss de produire un miroir à usage de requêtage. Outil pgadmin permet déjà de requêter les envts de prod et de formation.
+
+Besoin de stabilité dans le temps des formats.
+
+## Nouveautés V2.5
+
+- validation en masse (depuis le tableau de bord ; validation possible slt si le calcul de l'IPR est poss donc si les données env sont saisies. Possibilité de changer sur une station en cochant "pas de calcul de l'IPR" mais attention ça comprend pour ts les points de la station ..., question des calculs ipr sur pêches par point).
+- Chgt d'affectation d'un point
+
+Demande poss d'avoir des warnings si par ex taille-poids incohérentes ou autres données improbables.
+
+## A venir
+
+Intégration données fédé Bretagne
+Ateliers / TD à distance au lieu de formations lourdes
+Montée en charge du serveur (exports qui bloquent)
+Evolution des exports
+MàJ référentiel taxo Aspe / Sandre
+
+## A étudier
+
+Module d'import*
+Module carto
+Màj données environnementales IPR IPR+ (via connexion topage ?)
+Ouverture totale yc à l'ext
+
+NB Données environementales 
+
+## A faire
+
+Poss de corriger points d'affectation des pêches. Quand possible, ré-affecter les opérations de pêche à des codes points sandre jusqu'à qu'il n'y ait plus de pêches au point wama, puis le supprimer.
+
+Wama V2 nécesaire en LB pour récupérer certaines données en Loire Bretagne.
+
+# Conclusion
+
+Atelier "pratique" très utile pour clarifier utilisation + pour remontées d'infos vers la DG en vue d'améliorations de l'outil.
+
+
+
+
+
+
+
+
+
+
+

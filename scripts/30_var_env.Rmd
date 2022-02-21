@@ -49,6 +49,8 @@ Si l'on veut simplement compléter le tableau des captures avec les données env
 
 ```{r,eval = FALSE}
 df1_env <- df1 %>% 
+  select(pop_id, ope_id) %>% 
+  distinct() %>% 
   mef_ajouter_ope_env()
 ```
 
