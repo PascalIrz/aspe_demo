@@ -78,6 +78,7 @@ load(file = "../processed_data/colo_ext1.RData")
 
 ```{r, eval = FALSE}
 colo_ext1 <- df1 %>%
+  rename(lop_effectif = effectif) %>% # nom de la colonne attendu par mef_colo_ext_pops()
   mef_colo_ext_pops()
 ```
 

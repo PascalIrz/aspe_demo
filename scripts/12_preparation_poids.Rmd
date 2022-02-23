@@ -6,7 +6,9 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+knitr::opts_chunk$set(echo = TRUE,
+                      message = FALSE,
+                      warning = FALSE)
 ```
 
 # Chargements
@@ -25,9 +27,15 @@ load(file = "raw_data/toutes_tables_aspe_sauf_mei.RData")
 load(file = "raw_data/mei.RData")
 ```
 
-```{r, eval = TRUE, echo = FALSE}
-load(file = "../raw_data/toutes_tables_aspe_sauf_mei.RData")
-load(file = "../raw_data/mei.RData")
+```{r, echo = FALSE, warning = FALSE, message = FALSE}
+rdata_tables <- misc_nom_dernier_fichier(repertoire = "../../../raw_data",
+                                         pattern = "^tables")
+
+rdata_mei <- misc_nom_dernier_fichier(repertoire = "../../../raw_data",
+                                         pattern = "^mei")
+
+load(rdata_mei)
+load(rdata_tables)
 ```
 
 
@@ -110,7 +118,7 @@ lots_ok <- passerelle_mei %>%
   distinct()
 ```
 
-Ce qui représente `r (100 * nrow(lop_poids_est_ok) / (passerelle_mei %>% pull(lop_id) %>% n_distinct())) %>% round()`% des lots du dataframe `passerelle_mei`.
+Ce qui représente `r (100 * nrow(lots_ok) / (passerelle_mei %>% pull(lop_id) %>% n_distinct())) %>% round()`% des lots du dataframe `passerelle_mei`.
 
 ## Poids non renseignés
 
@@ -175,7 +183,7 @@ mes_esp_tlo <- poids_a_estimer %>%
 # pb / trop de lignes !
 poids_completes <- map2(.x = mes_esp_tlo$esp_code_alternatif,
                         .y = mes_esp_tlo$tlo_id,
-                        .f = qtp_estimer_poids,
+                        .f = aspeQual::qtp_estimer_poids,
                         df_biometrie = poids_a_estimer,
                         df_taille_poids = tp) %>%
   reduce(rbind)
