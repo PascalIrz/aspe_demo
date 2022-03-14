@@ -34,23 +34,16 @@ library(tod)
 
 ## Chargement des tables
 
-Les données ont été parsées depuis un dump de la base Aspe (cf. [ce tuto](https://rpubs.com/kamoke/713407)).
+Les données ont été parsées depuis un dump de la base Aspe (cf. [ce tuto](https://rpubs.com/kamoke/713407)). La fonction `misc_nom_dernier_fichier()` permet d'identifier le plus récents des fichiers de données dans le répertoire choisi.
 
-```{r, eval = FALSE}
-load(file = "raw_data/tables_sauf_mei_2021_10_21_11_44_01.RData")
-```
-
-```{r, echo = FALSE, warning = FALSE, message = FALSE}
-library(aspe)
-library(tidyverse)
-
+```{r, warning = FALSE, message = FALSE}
 rdata_tables <- misc_nom_dernier_fichier(repertoire = "../../../raw_data",
                                          pattern = "^tables")
 
 load(rdata_tables)
 ```
 
-La dernière date de saisie / modification / opération dans la base est le `r format(misc_derniere_date(), '%d %B %Y')`.
+Ici, la dernière date de saisie / modification / opération dans la base est le `r format(misc_derniere_date(), '%d %B %Y')`.
 
 ## Assemblage et filtrage des données
 
@@ -58,7 +51,7 @@ Le principe pour utiliser les tables de la base SQL d'origine est de constituer 
 
 On rajoute :
 
-- les dates de prospection et une variable `annee`, avec la fonction `mef_ajouter_ope_date()` pour permettre des agrégations annuelles
+- les dates de prospection (variable `ope_date`) et une variable `annee`, avec la fonction `mef_ajouter_ope_date()` pour permettre des agrégations annuelles
 - les données de captures au niveau des lots (sans les mesures individuelles) avec `mef_ajouter_lots()`
 - etc.
 
@@ -70,16 +63,16 @@ data <- mef_creer_passerelle() %>% # création passerelle
   mef_ajouter_libelle() # ajout libellé du point de prélèvement
 ```
 
-Ici on souhaite ne conserver que les pêches réalisées dans le cadre des réseaux, c'est simple avec la fonctions `mef_ajouter_objectif()` : 
+On exclut les protocoles ciblés "espèce" (ex : Vigitruite) pour ne conserver que les protocoles d'inventaire.
 
 ```{r}
 data <- data %>% 
-  mef_ajouter_objectif() %>%
-  filter(obj_libelle %in% c("RCS – Réseau de Contrôle de Surveillance",
-                            "RHP – Réseau Hydrobiologique Piscicole",
-                            "RNB – Réseau National de Bassin",
-                            "RRP – Réseau de Référence Pérenne",
-                            "RCO – Réseau Contrôle opérationnel"))
+  mef_ajouter_type_protocole() %>%
+  filter(pro_libelle %in% c("Pêche complète à un ou plusieurs passages",
+                            "Pêche partielle par points (grand milieu)",
+                            "Pêche par ambiances",
+                            "Pêche partielle sur berge"))
+
 ```
 
 ## Agrégation pour simplifier le tableau
@@ -97,8 +90,8 @@ captures <- data %>%
     pop_libelle
   ) %>%
   summarise(effectif = sum(lop_effectif, na.rm = TRUE)) %>%
-  ungroup() %>%
-  droplevels()
+  ungroup() # %>%
+#  droplevels()
 ```
 
 
@@ -130,15 +123,15 @@ Pour éviter les biais d'échantillonnage dans les tendances, on filtre le table
 
 ```{r}
 ope_sel <- captures %>% 
-  select(pop_id,
-         ope_date,
-         annee,
-         ope_id) %>% 
+  # select(pop_id,
+  #        ope_date,
+  #        annee,
+  #        ope_id) %>% 
   group_by(pop_id,
            annee) %>%
     filter(ope_date == max(ope_date)) %>% # dernière des dates de l'année
-    slice(1) %>% # une des opérations si plusieurs à cette date 
-  pull(ope_id)
+    slice(1) %>% # une seule des opérations si plusieurs à cette date 
+    pull(ope_id)
 
 captures <- captures %>% 
   filter(ope_id %in% ope_sel)
@@ -165,7 +158,7 @@ Les secteurs hydrographiques :
 
 ```{r}
 sh_geo <- tgeo_wfs_sandre(url_wfs = "https://services.sandre.eaufrance.fr/geo/sandre",
-                                      couche = "SecteurHydro") %>% 
+                          couche = "SecteurHydro") %>% 
   filter(!is.na(CdRegionHydro)) %>% 
   sf::st_transform(crs = 2154)
 ```
@@ -175,7 +168,7 @@ Les régions hydrographiques, en agrégeant les secteurs :
 ```{r}
 rh_geo <- sh_geo %>% 
   group_by(LbRegionHydro) %>% 
-  summarise() %>% 
+    summarise() %>% 
   ungroup()
 ```
 
@@ -279,7 +272,8 @@ Visualisation d'un échantillon des points.
 ```{r}
 mapview::mapview(sample_n(pop_geo, 100),
                  col.regions = "red") +
-  mapview::mapview(rh_geo)
+  mapview::mapview(rh_geo,
+                   legend = FALSE)
 ```
 
 # Assignation des points
