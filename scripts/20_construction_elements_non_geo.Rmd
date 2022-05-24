@@ -23,7 +23,7 @@ library(tidyverse)
 
 ```{r, echo = FALSE}
 # chargement données déjà prétraitées
-load(file = "../processed_data/captures.RData")
+load(file = "../processed_data/captures.RData") # chargement données déjà prétraitées
 
 # chargement mesures individuelles
 rdata_mei <- misc_nom_dernier_fichier(repertoire = "../../../raw_data",
@@ -38,16 +38,11 @@ rdata_tables <- misc_nom_dernier_fichier(repertoire = "../../../raw_data",
 load(rdata_tables)
 ```
 
-```{r, eval = FALSE}
-load(file = "processed_data/captures.RData") # chargement données déjà prétraitées
-load(file = "raw_data/mei.RData") # chargement mesures individuelles
-load(file = "raw_data/toutes_tables_aspe_sauf_mei.RData") # chargement autres tables
-```
-
+Ici, la dernière date de saisie / modification / opération dans la base est le `r format(misc_derniere_date(), '%d %B %Y')`.
 
 # df1 : espèce - opération
 
-### densité
+### Densité
 
 ```{r}
 df1 <- captures %>% 
@@ -55,7 +50,7 @@ df1 <- captures %>%
   select(-ope_surface_calculee)
 ```
 
-### longueur des individus
+### Longueur des individus
 
 Calcul des longueurs mini, maxi, moyenne et médiane pour chaque espèce à chaque opération. On ne tient pas compte du type de longueur (fourche ou totale).
 
@@ -85,7 +80,7 @@ colo_ext1 <- df1 %>%
 Comme c'est long, il peut être utile de sauvegarder le résultat de ce traitement. 
 
 ```{r, eval = FALSE}
-save(colo_ext1, file = "processed_data/colo_ext1.RData")
+save(colo_ext1, file = "../processed_data/colo_ext1.RData")
 ```
 
 ```{r}
@@ -101,7 +96,7 @@ df1 <- colo_ext1 %>%
 df1 %>%
   sample_n(10) %>%
   DT::datatable() %>%
-  DT::formatRound(columns = c('dens_ind_1000m2', 'taille_moy'),
+  DT::formatRound(columns = c('dens_ind_1000m2', 'taille_moy', 'diam_point'),
                   digits = 2)
 ```
 
@@ -112,10 +107,13 @@ df1 %>%
 
 ```{r}
 df2 <- df1 %>% 
-  group_by(pop_id, ope_id, annee) %>% 
+  group_by(pop_id,
+           ope_id,
+           annee) %>% 
     summarise(richesse = n_distinct(esp_code_alternatif),
               effectif = sum(effectif, na.rm = TRUE),
-              dens_ind_1000m2 = sum(dens_ind_1000m2, na.rm = TRUE)) %>% 
+              dens_ind_1000m2 = sum(dens_ind_1000m2,
+                                    na.rm = TRUE)) %>% 
   ungroup()
 ```
 
@@ -157,10 +155,14 @@ Comme les données enregistrées dans la base sont les captures, les effectifs n
 
 ```{r}
 df3 <- df1 %>% 
-  group_by(esp_code_alternatif, annee) %>% 
-    summarise(n_pres = sum(effectif > 0, na.rm = T)) %>% 
+  group_by(esp_code_alternatif,
+           annee) %>% 
+    summarise(n_pres = sum(effectif > 0,
+                           na.rm = T)) %>% 
   ungroup() %>% 
-  complete(annee, esp_code_alternatif, fill = list(n_pres = 0))
+  complete(annee,
+           esp_code_alternatif,
+           fill = list(n_pres = 0))
 
 opes_par_an <- df1 %>% 
   group_by(annee) %>% 

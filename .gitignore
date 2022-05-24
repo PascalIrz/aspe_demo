@@ -9,4 +9,6 @@ scripts/*.html
 /processed_data/
 /assets/
 /reunions/
+/reflexion/
 .Rproj.user
+/scripts/rsconnect/

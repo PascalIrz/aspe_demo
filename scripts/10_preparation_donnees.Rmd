@@ -39,9 +39,21 @@ Les données ont été parsées depuis un dump de la base Aspe (cf. [ce tuto](ht
 ```{r, warning = FALSE, message = FALSE}
 rdata_tables <- misc_nom_dernier_fichier(repertoire = "../../../raw_data",
                                          pattern = "^tables")
+```
 
+Le nom de ce fichier est :
+
+```{r}
+rdata_tables
+```
+
+On le charge.
+
+```{r, warning = FALSE, message = FALSE}
 load(rdata_tables)
 ```
+
+
 
 Ici, la dernière date de saisie / modification / opération dans la base est le `r format(misc_derniere_date(), '%d %B %Y')`.
 
@@ -89,9 +101,8 @@ captures <- data %>%
     ope_surface_calculee,
     pop_libelle
   ) %>%
-  summarise(effectif = sum(lop_effectif, na.rm = TRUE)) %>%
-  ungroup() # %>%
-#  droplevels()
+    summarise(effectif = sum(lop_effectif, na.rm = TRUE)) %>%
+  ungroup()
 ```
 
 
@@ -122,25 +133,21 @@ captures %>%
 Pour éviter les biais d'échantillonnage dans les tendances, on filtre le tableau de données pour ne retenir qu'une des opérations dans ces cas. Retenons par exemple la dernière de l'année (pêche d'automne). Comme il y a même  quelques cas où plusieurs opérations sont enregistrées le même jour, on n'en retient qu'une.
 
 ```{r}
-ope_sel <- captures %>% 
-  # select(pop_id,
-  #        ope_date,
-  #        annee,
-  #        ope_id) %>% 
+ope_sel <- captures %>%
   group_by(pop_id,
            annee) %>%
-    filter(ope_date == max(ope_date)) %>% # dernière des dates de l'année
-    slice(1) %>% # une seule des opérations si plusieurs à cette date 
-    pull(ope_id)
+  filter(ope_date == max(ope_date)) %>% # dernière des dates de l'année
+  slice(1) %>% # une seule des opérations si plusieurs à cette date
+  pull(ope_id)
 
-captures <- captures %>% 
+captures <- captures %>%
   filter(ope_id %in% ope_sel)
 ```
 
 
 # Préparation des données spatiales
 
-Il s'agit ici d'opérer les étapes qui permettront un affichage spatialisé des données élémentaires (les points de prélèvement) ou agrégées sur un territoire qui peut être administratif (par exemple un département) ou hydrographique (un bassin hydro), voire un peu des deux (un SAGE). Les étapes seront :
+Il s'agit ici d'opérer les étapes qui permettront un affichage spatialisé des données élémentaires (les points de prélèvement) ou agrégées sur un territoire qui peut être administratif (par exemple un département) ou hydrographique (un bassin hydro). Les étapes seront :
 
 - Téléchargement des découpages territoriaux fins
 - Agrégation aux échelles supérieures
@@ -157,7 +164,7 @@ On procède à un découpage avec trois niveaux de finesse. Comme notre étude e
 Les secteurs hydrographiques :
 
 ```{r}
-sh_geo <- tgeo_wfs_sandre(url_wfs = "https://services.sandre.eaufrance.fr/geo/sandre",
+sh_geo <- tod::wfs_sandre(url_wfs = "https://services.sandre.eaufrance.fr/geo/sandre",
                           couche = "SecteurHydro") %>% 
   filter(!is.na(CdRegionHydro)) %>% 
   sf::st_transform(crs = 2154)
@@ -175,7 +182,7 @@ rh_geo <- sh_geo %>%
 Les districts hydrographiques, qui doivent être téléchargés car ils ne sont pas indiqués dans les objets précédents :
 
 ```{r}
-dh_geo <- tgeo_wfs_sandre(url_wfs = "https://services.sandre.eaufrance.fr/geo/topage?",
+dh_geo <- tod::wfs_sandre(url_wfs = "https://services.sandre.eaufrance.fr/geo/topage?",
                           couche = "BassinHydrographique_FXX") %>% 
   sf::st_transform(crs = 2154)
 ```
@@ -193,15 +200,15 @@ sh_geo %>%
 On peut accéder au découpage administratif avec le package {COGiter}.
 
 ```{r}
-dep_geo <- COGiter::departements_metro_geo %>% 
-             left_join(COGiter::departements) %>% 
-             select(DEP,
-                    NCCENR)
+dep_geo <- COGiter::departements_metro_geo %>%
+  left_join(COGiter::departements) %>%
+  select(DEP,
+         NCCENR)
 
-reg_geo <- COGiter::regions_metro_geo %>% 
-             left_join(COGiter::regions) %>% 
-             select(REG,
-                    NCCENR)
+reg_geo <- COGiter::regions_metro_geo %>%
+  left_join(COGiter::regions) %>%
+  select(REG,
+         NCCENR)
 ```
 
 
@@ -249,7 +256,8 @@ coords <- geo_convertir_coords_df(df = pop,
                                   var_y = pop_coordonnees_y,
                                   var_crs_initial = typ_code_epsg,
                                   crs_sortie = 2154) %>%
-  rename(x_l93 = X, y_l93 = Y)
+  rename(x_l93 = X,
+         y_l93 = Y)
 ```
 
 ### Sélection du périmètre
@@ -308,14 +316,30 @@ pop_geo <- pop_geo %>%
 # Sauvegarde des données préparées
 
 ```{r, echo = FALSE}
-save(captures, ope_sel, file = "../processed_data/captures.RData")
-save(pop_geo, file = "../processed_data/pop_geo.RData")
-save(dep_geo, reg_geo, sh_geo, rh_geo, dh_geo, file = "../processed_data/poly_geo_simp.RData")
+save(captures,
+     ope_sel,
+     file = "../processed_data/captures.RData")
+save(pop_geo,
+     file = "../processed_data/pop_geo.RData")
+save(dep_geo,
+     reg_geo,
+     sh_geo,
+     rh_geo,
+     dh_geo,
+     file = "../processed_data/poly_geo_simp.RData")
 ```
 
 ```{r, eval = FALSE}
-save(captures, ope_sel, file = "processed_data/captures.RData")
-save(pop_geo, file = "processed_data/pop_geo.RData")
-save(dep_geo, reg_geo, sh_geo, rh_geo, dh_geo, file = "processed_data/poly_geo_simp.RData")
+save(captures,
+     ope_sel,
+     file = "processed_data/captures.RData")
+save(pop_geo,
+     file = "processed_data/pop_geo.RData")
+save(dep_geo,
+     reg_geo,
+     sh_geo,
+     rh_geo,
+     dh_geo,
+     file = "processed_data/poly_geo_simp.RData")
 ```
 
